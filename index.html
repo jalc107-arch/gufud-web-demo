@@ -22,15 +22,23 @@
 .preview-help .how b{color:#84e8f4}.preview-help .not-ready{margin-top:12px;color:#eacb8d;font-size:12px}
 .preview-help .muted{font-size:12px;color:#9ec5d6}.tools select:disabled{opacity:.55;cursor:not-allowed}
 </style></head><body><div style="background:#4b3119;color:#fff3c4;padding:11px 18px;text-align:center;font:700 13px/1.45 system-ui,-apple-system,sans-serif;border-bottom:2px solid #e7bd6b">PRUEBA DE NAVEGACIÓN · SOLO DATOS FICTICIOS · NO CARGUE PARTES INSTITUCIONALES</div><main class="app"><header class="top"><div class="brand"><div class="logo">G</div><div><div class="eyebrow">CENTRO DE MANDO</div><h1>GUFUD <span style="color:var(--cyan)">Web</span></h1></div></div><span class="demo">PILOTO WEB · SIN BASE CENTRAL</span></header>
-<div class="notice"><strong>Piloto web demostrativo, sin base de datos central.</strong> El ejemplo inicial usa datos ficticios. En un navegador compatible, puede leer Excel: <strong>no se sube a internet</strong>. Por seguridad, utilice únicamente archivos ficticios para probar la importación; no cargue información institucional aquí. Los datos importados se conservarán en este navegador, no en una cuenta compartida. J1 y Administrador son modos de demostración, <em>no</em> usuarios autenticados. Los cambios se guardan únicamente en este navegador.</div>
+<div class="notice"><strong>J1: esta página muestra programación simulada y no se conecta con sus partes reales.</strong> El ejemplo inicial usa datos ficticios. En un navegador compatible, puede leer Excel: <strong>no se sube a internet</strong>. Por seguridad, utilice únicamente archivos ficticios para probar la importación; no cargue información institucional aquí. Los datos importados se conservarán en este navegador, no en una cuenta compartida. J1 y Administrador son modos de demostración, <em>no</em> usuarios autenticados. Los cambios se guardan únicamente en este navegador.</div>
 <div class="tools"><label for="datepick"><b>Servicio programado</b></label><select id="datepick" aria-label="Fecha del servicio" disabled><option>Requiere navegador compatible</option></select><label for="mode"><b>Vista</b></label><select id="mode" disabled><option value="j1">J1 · Consulta</option><option value="admin">Administrador · Cargar Excel</option></select><span id="version" class="pill">VISOR LIMITADO</span></div>
-<div id="root"><section class="preview-help" id="ayuda-visor" aria-live="polite">
-  <div class="eyebrow">VISTA PREVIA DE ARCHIVO · iPHONE</div>
-  <h2>El visor no está ejecutando GUFUD Web</h2>
-  <p>Si ve este aviso, el lector de archivos del celular no ha iniciado la aplicación. <strong>No se ha cargado ningún Excel</strong>, y los botones de administrador no funcionan dentro de esta vista previa.</p>
-  <div class="how"><b>Para cargar su parte hoy:</b><p>1. Descargue este HTML en su computador Windows.<br>2. Ábralo con <strong>Microsoft Edge</strong>.<br>3. Seleccione <strong>Administrador · Cargar Excel</strong> y luego <strong>Admin</strong>.<br>4. Pulse <strong>Excel de personal (.xlsm/.xlsx)</strong> y <strong>Leer y revisar Excel</strong>.</p></div>
-  <p class="muted">El importador procesa el Excel localmente; todavía no existe enlace compartido para J1 ni base de datos conectada. Para usarlo plenamente en iPhone necesitaremos un sitio privado autorizado con inicio de sesión.</p>
-  <p class="not-ready">No cargue información institucional en sitios públicos para intentar resolver esta limitación.</p>
+<div id="root"><section class="preview-help" id="j1-estatico" aria-live="polite">
+<div class="eyebrow">J1 · RESUMEN DE DEMOSTRACIÓN</div>
+<h2>Programación ficticia · 25/10/2026</h2>
+<p>Este es un <strong>ejemplo público</strong> de lo que verá J1. NO contiene partes policiales ni se actualiza con los Excel de otro dispositivo.</p>
+<div class="grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+<div class="kpi"><div class="label">Fuerza efectiva</div><div class="val">20</div><small>1-6-6-7</small></div>
+<div class="kpi"><div class="label">Fuerza disponible</div><div class="val">17</div><small>1-5-5-6</small></div>
+<div class="kpi"><div class="label">Novedades</div><div class="val">3</div><small>0-1-1-1</small></div>
+<div class="kpi"><div class="label">Facciones</div><div class="val">6</div><small>Solo ejemplo</small></div></div>
+<h3>Detalle de J1</h3>
+<details class="line"><summary>Puntos de facción <span>6</span></summary><div class="reveal">Punto Alfa: 4 · Punto Bravo: 4 · Punto Charlie: 3 · Punto Eco: 3 · Apoyo administrativo: 1 · Punto Delta: 2. Todas las ubicaciones son inventadas.</div></details>
+<details class="line"><summary>Novedades <span>3</span></summary><div class="reveal">Vacaciones: 1 · Franquicia: 1 · Permiso: 1. Datos de demostración.</div></details>
+<details class="line"><summary>Vehículos y medios</summary><div class="reveal">Vehículos: 8 (7 en servicio). Radios: 6 · PDA: 3. Inventario ficticio.</div></details>
+<p class="not-ready"><strong>Si ve solo esta pantalla:</strong> el navegador no ejecutó la versión interactiva. Abra el enlace HTTPS en Safari o Edge. Si ve tarjetas y menú inferior, la aplicación sí se inició.</p>
+<p class="muted">Para que J1 reciba automáticamente partes reales será necesario instalar autenticación, almacenamiento central y autorización institucional.</p>
 </section></div></main><nav id="nav" class="bottom" aria-label="Navegación"><a href="#ayuda-visor" style="display:grid;place-items:center;min-height:54px;color:#b9e2f2;text-decoration:none;width:100%;font-size:13px;font-weight:700">ⓘ Guía para abrir GUFUD Web en Edge</a></nav><div id="modal" class="drawer" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="sheet"><div class="sheethead"><div><div class="eyebrow">DETALLE GUFUD</div><h2 id="modal-title">Detalle</h2></div><button type="button" id="close" class="btn alt">✕ Cerrar</button></div><div class="sheetbody" id="modal-body"></div></div></div>
 <script id="xlsx-local-library">/*!
 
@@ -48,7 +56,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 <script>
 'use strict';
 const KEY='gufud_web_piloto_excel_v2',GRADES=['CR','TC','MY','CT','TE','ST','CM','SC','IJ','IT','SI','PT','PP','AXP'],GROUPS=['Oficiales','Nivel ejecutivo','Patrulleros','Auxiliares'];
-const gid=g=>GRADES.indexOf(g),group=g=>gid(g)<=5?0:gid(g)<=10?1:gid(g)<=12?2:3;
+const gid=g=>GRADES.indexOf(g),group=g=>gid(g)<0?3:gid(g)<=4?0:gid(g)<=10?1:gid(g)<=12?2:3;
 const day=s=>{const [y,m,d]=s.split('-');return `${d}/${m}/${y}`};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=s=>{try{return new Intl.DateTimeFormat('es-CO',{dateStyle:'short',timeStyle:'short',timeZone:'America/Bogota'}).format(new Date(s))}catch{return s||'No registrado'}};
@@ -62,7 +70,7 @@ const initial=()=>{
  const p1=fakePeople(),p2=fakePeople().map(p=>({...p}));p2[2].faccion='Punto Bravo';p2[8].estado='Novedades';p2[8].novedad='Franquicia';p2[8].faccion='';
  return {dataset:'ficticio',parts:{'2026-10-24':{serviceDate:'2026-10-24',preparedAt:'2026-10-23T19:00:00-05:00',revisions:[{num:1,at:'2026-10-23T19:00:00-05:00',reason:'Programación inicial simulada',personnel:p2,assets:fakeAssets()}],published:1},'2026-10-25':{serviceDate:'2026-10-25',preparedAt:'2026-10-24T19:00:00-05:00',revisions:[{num:1,at:'2026-10-24T19:00:00-05:00',reason:'Programación inicial simulada',personnel:p1,assets:fakeAssets()}],published:1}},services:[],audit:[]}
 };
-let data;try{data=JSON.parse(localStorage.getItem(KEY)||'null')||initial()}catch{data=initial()}
+let data;try{const candidate=JSON.parse(localStorage.getItem(KEY)||'null');data=(candidate&&candidate.parts&&Object.keys(candidate.parts).length&&Array.isArray(candidate.services)&&Array.isArray(candidate.audit))?candidate:initial()}catch{data=initial()}
 const el=id=>document.getElementById(id);let sel=Object.keys(data.parts).sort().at(-1)||'2026-10-25',mode='j1',section='resumen',cat=0,importPending=null,importMessage='',importIsError=false;
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(data));return true}catch{alert('No se pudo guardar en este navegador. No cierre la pestaña antes de corregirlo.');return false}}
 function part(){return data.parts[sel]};function rev(){const p=part();return p.revisions.find(x=>x.num===(mode==='j1'?p.published:p.revisions.at(-1).num))||p.revisions.at(-1)}
@@ -219,7 +227,7 @@ function renderAdmin(){
  <div class="btnrow"><button class="btn danger" data-action="reset">Restaurar datos ficticios (elimina importaciones locales)</button></div></div>`
 }
 function render(){const r=rev(),s=summarize(r);el('datepick').innerHTML=Object.keys(data.parts).sort().reverse().map(d=>`<option value="${esc(d)}" ${d===sel?'selected':''}>${day(d)}</option>`).join('');el('mode').value=mode;el('version').textContent=mode==='j1'?(part().published?'Publicada v'+part().published:'SIN PUBLICAR'):'Revisión v'+r.num;el('nav').innerHTML=[['resumen','⌂','Resumen'],['facciones','▦','Facciones'],['novedades','☷','Novedades'],['logistica','▣','Logística'],['historial','◷','Historial'],...(mode==='admin'?[['admin','⚙','Admin']]:[])].map(([s,i,t])=>`<button data-section="${s}" class="${section===s?'active':''}"><span>${i}</span>${t}</button>`).join('');
- const body=(mode==='j1'&&part().published===0)?'<div class="warning"><b>Parte pendiente de publicar.</b> Esta programación todavía no fue autorizada para la vista J1. Cambie a Administrador y pulse Publicar revisión local.</div>':section==='resumen'?renderResumen(r,s):section==='facciones'?renderFacciones(s):section==='novedades'?renderNovedades(s):section==='logistica'?renderLog(r,s):section==='historial'?renderHist():mode==='admin'?renderAdmin():renderResumen(r,s);
+ const body=(mode==='j1'&&part().published===0)?'<div class="warning"><b>No existe parte publicado para '+day(sel)+'.</b> El administrador solo ha preparado un borrador en ESTE navegador. No se sincroniza con otro celular. Para consultar el ejemplo anterior, seleccione una fecha publicada en «Servicio programado». La publicación compartida requiere autenticación y base de datos central.</div>':section==='resumen'?renderResumen(r,s):section==='facciones'?renderFacciones(s):section==='novedades'?renderNovedades(s):section==='logistica'?renderLog(r,s):section==='historial'?renderHist():mode==='admin'?renderAdmin():renderResumen(r,s);
  el('root').innerHTML=body;}
 function openModal(title,content){el('modal-title').textContent=title;el('modal-body').innerHTML=content;el('modal').classList.add('on');document.body.style.overflow='hidden';el('close').focus()}
 function closeModal(){el('modal').classList.remove('on');document.body.style.overflow=''}
@@ -231,5 +239,5 @@ function action(a){if(mode!=='admin')return;if(a==='inspectExcel'){inspectExcel(
 document.addEventListener('change',ev=>{if(ev.target.id!=='imp-personal')return;const d=dateFromExcelName(ev.target.files[0]?.name||'');if(d){const input=el('imp-service-date');if(input)input.value=d;const msg=el('imp-message');if(msg)msg.textContent='Fecha del servicio reconocida: '+day(d)+'. Revísela y pulse «Leer y revisar Excel». ';}});
 document.addEventListener('click',ev=>{const tg=ev.target.closest('[data-section],[data-category],[data-person],[data-place],[data-novel],[data-action]');if(!tg)return;if(tg.dataset.section){section=tg.dataset.section;render();scrollTo({top:0,behavior:'smooth'})}else if(tg.dataset.category!==undefined){cat=Number(tg.dataset.category);render()}else if(tg.dataset.person){showPerson(tg.dataset.person)}else if(tg.dataset.place){showPlace(tg.dataset.place)}else if(tg.dataset.novel){showNovel(tg.dataset.novel)}else if(tg.dataset.action){action(tg.dataset.action)}});
 el('datepick').disabled=false;el('mode').disabled=false;
-el('datepick').addEventListener('change',e=>{sel=e.target.value;importPending=null;render()});el('mode').addEventListener('change',e=>{mode=e.target.value;if(mode==='j1'&&section==='admin')section='resumen';render()});el('close').addEventListener('click',closeModal);el('modal').addEventListener('click',e=>{if(e.target===el('modal'))closeModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});render();
+el('datepick').addEventListener('change',e=>{sel=e.target.value;importPending=null;render()});el('mode').addEventListener('change',e=>{mode=e.target.value;section=mode==='j1'?'resumen':'admin';render()});el('close').addEventListener('click',closeModal);el('modal').addEventListener('click',e=>{if(e.target===el('modal'))closeModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});render();
 </script></body></html>
