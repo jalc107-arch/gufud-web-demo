@@ -14,7 +14,7 @@ const validDay = d=>typeof d==="string" && /^20[2-9]\d-(0[1-9]|1[0-2])-([0-2]\d|
 function synthetic(){
   const ranks=["CT","TE","IJ","IT","SI","SI","PT","PT","PT","PT","PT","PP","PP","PP","PP","PP","AXP","AXP","AXP","AXP"];
   const points=POINTS.slice(0,6);
-  const people=ranks.map((rank,i)=>({id:"P"+String(i+1).padStart(3,"0"),rank,name:"Funcionario de prueba "+String(i+1).padStart(3,"0"),point:i<17?points[i%6]:"",status:i<17?"Disponible":STATES[i-17]}));
+  const people=ranks.map((rank,i)=>({id:"P"+String(i+1).padStart(3,"0"),rank,name:"Funcionario de prueba "+String(i+1).padStart(3,"0"),point:i<17?points[i%6]:"",status:i<17?"Disponible":["PERMISO","VACACIONES","CITA MÉDICA"][i-17]}));
   return JSON.stringify({people,logistics:{vehicles_total:8,vehicles_service:7,radios:6,pdas:3},notes:"Programación de prueba, no acredita prestación de servicio"});
 }
 async function ready(db){
