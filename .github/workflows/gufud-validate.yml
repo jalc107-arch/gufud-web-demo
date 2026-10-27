@@ -1,0 +1,27 @@
+name: GUFUD - validacion de piloto ficticio
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app-web/**'
+      - 'functions/**'
+      - 'tests/**'
+      - '.github/workflows/gufud-validate.yml'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  validate:
+    name: Verificar sintaxis y controles basicos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener repositorio
+        uses: actions/checkout@v4
+      - name: Instalar Node estable
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar sintaxis del backend Cloudflare
+        run: node --input-type=module --check < functions/api/gufud.js
+      - name: Validar interfaz, rutas y barreras
+        run: node tests/verify.mjs
