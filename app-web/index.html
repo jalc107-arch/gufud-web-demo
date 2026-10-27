@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b2639">
+<meta name="robots" content="noindex,nofollow">
+<title>GUFUD Web · Centro de mando piloto privado</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;color:#ecf8ff;background:#071927}
+*{box-sizing:border-box}body{margin:0;min-height:100dvh;background:radial-gradient(ellipse at 48% -12%,#1d485a 0%,#071927 65%)}button,input,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:default}a{color:#a3dfea}
+main{max-width:1040px;margin:auto;padding:20px 16px 68px}
+.top{display:flex;align-items:center;gap:13px}.mark{width:49px;height:49px;border-radius:13px;display:grid;place-items:center;background:#8ed8df;color:#0c3440;font-size:27px;font-weight:900;flex-shrink:0}.eyebrow{color:#9fdae4;letter-spacing:.1em;text-transform:uppercase;font-size:10px;font-weight:800}h1{font-size:25px;letter-spacing:-.04em;margin:2px 0 0}h1 em{font-style:normal;color:#8ed8df}h2{font-size:18px;margin:0 0 9px;letter-spacing:-.02em}.subtitle{color:#9cbfcb;font-size:12px;margin:4px 0 0}.top button{margin-left:auto}.warning{border:1px solid #8f6e35;background:#392f20;color:#ffe0a0;padding:12px 14px;border-radius:12px;font-size:12px;margin:18px 0}.warning strong{display:block;font-size:11px;margin-bottom:3px;letter-spacing:.03em}.p{color:#abc6d1;font-size:13px;line-height:1.55}.hidden{display:none!important}
+button{border:1px solid #3a6176;background:#143447;color:#e7f6fc;border-radius:10px;padding:10px 13px;font-weight:750}.mainbtn{background:#84d4de;color:#082c3b;border-color:#8ee6e7}.pill{color:#8fdacb;font-size:11px;font-weight:800;letter-spacing:.03em}.outline{background:transparent}
+.panel{background:#112d40;border:1px solid #325266;border-radius:14px;padding:17px;margin:13px 0}.panel h2{font-size:19px}.panel>p{margin:0 0 12px}
+.login{max-width:440px;margin:42px auto}.login h2{font-size:23px}.login form{display:grid;gap:12px;margin-top:18px}label{display:grid;gap:6px;color:#d1e7ef;font-size:12px;font-weight:700}
+input,select{background:#092435;color:#edf9fd;border:1px solid #4b6b7f;padding:11px;border-radius:9px;min-width:0;width:100%}
+input:focus,select:focus,button:focus-visible{outline:2px solid #8ed8df;outline-offset:2px}
+.status{margin:14px 0;padding:11px 13px;background:#173d50;border:1px solid #517c89;border-radius:10px;color:#d2f2f3;font-size:12px;min-height:20px}.status:empty{display:none}
+.bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:14px 0}.bar>label{margin-left:auto;display:flex;align-items:center;gap:8px}.bar select{width:auto}.pub{padding:15px 17px;background:linear-gradient(110deg,#19465a,#0f3144);border:1px solid #36687a;border-radius:13px;margin-bottom:15px;display:flex;align-items:center;justify-content:space-between;gap:8px}.pub strong{font-size:14px}.pub small{display:block;color:#a7c9d7;font-size:11px;margin-top:5px}.tabs{display:flex;gap:7px;overflow-x:auto;padding:3px 0 10px;margin:14px 0}.tabs button{white-space:nowrap;flex-shrink:0;font-size:12px;padding:10px 13px}.tabs .active{background:#83d5e0;border-color:#83d5e0;color:#092d3d}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.stat{min-width:0;background:#15384b;border:1px solid #32576a;border-radius:12px;padding:15px}.stat span{font-size:11px;color:#b8d5e1;font-weight:750;display:block}.stat b{font-size:32px;color:#8bdde6;font-weight:800;display:block;font-variant-numeric:tabular-nums}.stat small{color:#c0d4e1;font-size:10px}.stat.green b{color:#8ee2b6}.stat.gold b{color:#f0ce87}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}.item{border:0;border-bottom:1px solid #305165;border-radius:0;background:transparent;color:#e9f8ff;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 5px;width:100%;text-align:left;font-weight:700}.item:last-child{border-bottom:0}.item span{min-width:0}.item b{color:#94d9e5;font-size:12px}.item small{display:block;color:#acc9d7;font-size:11px;font-weight:500;margin-top:4px}details{border:1px solid #3f6578;background:#183c50;border-radius:12px;margin:10px 0;overflow:hidden}summary{cursor:pointer;padding:15px;font-weight:800;display:flex;justify-content:space-between;gap:10px}summary span{color:#8cdeeb}details>.detail-body{padding:4px 13px 12px;border-top:1px solid #335b71}
+.cat{display:flex;gap:7px;flex-wrap:wrap;margin:13px 0}.cat button{font-size:12px}.cat button.active{background:#8bd6e1;color:#092e3d}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.block{padding:15px;border:1px solid #396575;background:#17394b;border-radius:12px;margin:15px 0}.block p{color:#aac8d7;font-size:12px}.actionrow{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.actionrow button{flex:1}.highlight{background:#133e41;border-color:#417c73}
+.edit-note{border:1px solid #9e854a;background:#3e3426;color:#f0d7a5;padding:12px;border-radius:10px;font-size:12px;margin-top:20px}
+.modal{position:fixed;inset:0;background:#071321dc;z-index:5;padding:14px;display:grid;place-items:center}.modal article{width:min(550px,100%);max-height:92dvh;overflow:auto;background:#112f43;border:1px solid #4c7888;border-radius:16px;padding:19px}.close{float:right}footer{margin-top:28px;text-align:center;color:#91b1c1;font-size:11px}
+@media(max-width:720px){main{padding:14px 12px 36px}.stats{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr;gap:0}.stat b{font-size:30px}.bar>label{order:3;width:100%}.bar select{flex:1}.form-grid{grid-template-columns:1fr}.panel{padding:14px}.top h1{font-size:23px}.pub{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+<main>
+<header class="top"><div class="mark">G</div><div><div class="eyebrow">Centro de mando · Sincronización de prueba</div><h1>GUFUD <em>Web</em></h1><div class="subtitle">Administración y consulta J1 desde cualquier dispositivo</div></div><button id="logout" class="hidden">Salir</button></header>
+<div class="warning"><strong>ENTORNO EXCLUSIVO DE DEMOSTRACIÓN</strong>Solo datos inventados. No cargue partes reales, nóminas, ubicaciones ni archivos institucionales. El sitio requiere una base privada conectada.</div>
+<div id="notice" class="status" role="status" aria-live="polite"></div>
+<section class="panel login" id="login"><h2>Acceso al piloto GUFUD</h2><p class="p">Use la clave de prueba asignada. J1 solo puede consultar partes publicados; Administrador puede preparar y publicar revisiones.</p><form id="sign-in"><label>Clave de acceso <input type="password" id="access-code" autocomplete="off" minlength="20" required placeholder="Clave del piloto"></label><button class="mainbtn" type="submit">Ingresar</button></form></section>
+<section id="workspace" class="hidden">
+<div class="bar"><span id="role" class="pill"></span><label>Fecha de servicio <select id="day"></select></label><button id="refresh">Actualizar</button></div>
+<div id="version" class="pub"></div>
+<nav class="tabs" id="tabs" aria-label="Secciones"><button data-tab="resumen" class="active">Resumen</button><button data-tab="facciones">Facciones</button><button data-tab="novedades">Novedades</button><button data-tab="medios">Logística</button><button data-tab="historial">Historial</button><button data-tab="admin" id="admin-tab">Admin</button></nav>
+<div id="view"></div></section>
+<footer>GUFUD Web. Piloto técnico, sin información operativa real. Las confirmaciones se distinguen de los servicios programados.</footer>
+</main>
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true"><article><button id="modal-close" class="close">Cerrar ✕</button><div id="modal-body"></div></article></div>
+<script>
+(()=>{
+"use strict";
+const $=id=>document.getElementById(id);
+const grades=['CR','TC','MY','CT','TE','ST','CM','SC','IJ','IT','SI','PT','PP','AXP'];
+const categories=['Oficiales','Nivel ejecutivo','Patrulleros','Auxiliares'];
+const pts=['Punto Alfa','Punto Bravo','Punto Charlie','Punto Delta','Punto Eco','Apoyo administrativo'];
+const states=['Disponible','PERMISO','VACACIONES','CITA MÉDICA'];
+let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=d=>{const a=String(d).split('-');return a.length===3?[a[2],a[1],a[0]].join('/'):d};
+const cat=r=>grades.indexOf(r)<=4?0:grades.indexOf(r)<=10?1:grades.indexOf(r)<=12?2:3;
+const scheme=a=>[0,1,2,3].map(i=>a.filter(p=>cat(p.rank)===i).length).join('-');
+const sort=a=>a.slice().sort((x,y)=>grades.indexOf(x.rank)-grades.indexOf(y.rank)||x.name.localeCompare(y.name,'es'));
+const say=m=>{$('notice').textContent=m||''};
+const api=async(method,body=null,extra='')=>{
+ const opts={method,credentials:'same-origin',cache:'no-store',headers:{}};
+ if(body){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(body)}
+ const res=await fetch('/api/gufud'+extra,opts);
+ let d;try{d=await res.json()}catch{throw Error('La API GUFUD no está activa. Verifique Cloudflare Pages y su base D1.')}
+ if(!res.ok||!d.ok)throw Error(d.error||'Servicio no disponible');
+ return d;
+};
+async function refresh(day=null){
+ try{
+  const search=day?'?day='+encodeURIComponent(day):'';
+  const d=await api('GET',null,search);
+  current=d;
+  $('login').classList.add('hidden');$('workspace').classList.remove('hidden');$('logout').classList.remove('hidden');
+  $('admin-tab').classList.toggle('hidden',d.role!=='admin');
+  $('role').textContent=d.role==='admin'?'ADMINISTRADOR · EDICIÓN':'J1 · SOLO CONSULTA';
+  const oldDay=d.day;
+  $('day').innerHTML=d.days.map(x=>'<option value="'+esc(x)+'">'+fmt(x)+'</option>').join('');
+  $('day').value=oldDay;
+  if(d.role!=='admin' && tab==='admin')tab='resumen';
+  render(); return true;
+ }catch(e){
+  if((e.message||'').includes('iniciar sesión')){current=null;$('login').classList.remove('hidden');$('workspace').classList.add('hidden');$('logout').classList.add('hidden');}
+  say(e.message);return false;
+ }
+}
+const kpi=(l,n,sub='',c='')=>'<div class="stat '+c+'"><span>'+esc(l)+'</span><b>'+esc(n)+'</b><small>'+esc(sub)+'</small></div>';
+const personBtn=p=>'<button class="item" data-person="'+esc(p.id)+'"><span>'+esc(p.rank)+' · '+esc(p.name)+'<small>'+esc(p.point||p.status)+'</small></span><b>Detalle ›</b></button>';
+function render(){
+ if(!current)return;
+ const p=current.part||{},people=sort(p.people||[]),active=people.filter(x=>x.status==='Disponible'),nov=people.filter(x=>x.status!=='Disponible'),log=p.logistics||{},points=[...new Set(active.map(x=>x.point).filter(Boolean))];
+ const pending=current.role==='admin'&&current.draftRev!==current.publishedRev;
+ $('version').innerHTML='<div><strong>'+fmt(current.day)+' · '+(current.publishedRev?'Publicado v'+current.publishedRev:'Parte pendiente de publicar')+'</strong><small>'+(pending?'Borrador v'+current.draftRev+' aún no visible para J1':'Sincronización central: última publicación aprobada')+'</small></div><span class="pill">'+(current.role==='admin'?'ADMIN':'LECTURA')+'</span>';
+ document.querySelectorAll('#tabs [data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+ let html='';
+ if(!current.part){html='<section class="panel"><h2>Parte no publicado</h2><p class="p">No hay un corte aprobado para esta fecha. J1 no puede consultar borradores.</p></section>'; if(current.role!=='admin'){$('view').innerHTML=html;return;}}
+ if(tab==='resumen'){
+  html='<div class="stats">'+kpi('Fuerza efectiva',people.length,scheme(people))+kpi('Fuerza disponible',active.length,scheme(active),'green')+kpi('Novedades',nov.length,scheme(nov),'gold')+kpi('Puntos de facción',points.length,'Solo ejemplo')+kpi('Vehículos en servicio',log.vehicles_service||0,(log.vehicles_total||0)+' registrados')+kpi('Fuera de servicio',(log.vehicles_total||0)-(log.vehicles_service||0),'Estado ficticio','gold')+kpi('Radios',log.radios||0,'Simulados')+kpi('PDA',log.pdas||0,'Simulados')+'</div>';
+  html+='<div class="cols"><section class="panel"><h2>Distribución por facción</h2><p class="p">Personal programado (OF-NE-PT-AXP)</p>'+points.map(pt=>'<button class="item" data-tabgo="facciones"><span>'+esc(pt)+'<small>'+scheme(active.filter(x=>x.point===pt))+'</small></span><b>'+active.filter(x=>x.point===pt).length+' ›</b></button>').join('')+'</section><section class="panel"><h2>Novedades y medios</h2>'+[...new Set(nov.map(x=>x.status))].map(s=>'<button class="item" data-tabgo="novedades"><span>'+esc(s)+'</span><b>'+nov.filter(x=>x.status===s).length+'</b></button>').join('')+'<p class="p" style="margin-top:18px">Radios: '+(log.radios||0)+' · PDA: '+(log.pdas||0)+'</p></section></div>';
+ }
+ if(tab==='facciones')html='<section class="panel"><h2>Facciones</h2><p class="p">Puestos y servicios programados. No acreditan presencia efectiva.</p>'+points.map(pt=>'<details><summary>'+esc(pt)+' <span>'+active.filter(x=>x.point===pt).length+' · '+scheme(active.filter(x=>x.point===pt))+'</span></summary><div class="detail-body">'+sort(active.filter(x=>x.point===pt)).map(personBtn).join('')+'</div></details>').join('')+'</section>';
+ if(tab==='novedades')html='<section class="panel"><h2>Novedades</h2><p class="p">Personal ficticio con situaciones administrativas.</p>'+nov.map(personBtn).join('')+'</section>';
+ if(tab==='medios')html='<section class="panel"><h2>Logística de prueba</h2><div class="stats">'+kpi('Vehículos registrados',log.vehicles_total||0)+kpi('En servicio',log.vehicles_service||0)+kpi('Radios',log.radios||0)+kpi('PDA',log.pdas||0)+'</div><p class="p" style="margin-top:15px">Estos medios son completamente ficticios.</p></section>';
+ if(tab==='historial')html='<section class="panel"><h2>Historial personal</h2><p class="p">Orden de grados institucional. Servicios programados y confirmados se presentan por separado.</p><div class="cat">'+categories.map((n,i)=>'<button data-group="'+i+'" class="'+(i===group?'active':'')+'">'+n+'</button>').join('')+'</div>'+people.filter(x=>cat(x.rank)===group).map(personBtn).join('')+'</section>';
+ if(tab==='admin'){
+  if(current.role!=='admin'){tab='resumen';render();return}
+  if(!selection||selection.day!==current.day){const v=people[0];selection={day:current.day,id:v?.id||'P001',status:v?.status||'Disponible',point:v?.point||pts[0]}}
+  selectedMember=selection.id;
+  const selected=people.find(x=>x.id===selectedMember)||people[0];
+  html='<section class="panel"><h2>Administración y publicación</h2><p class="p">Los cambios de ejemplo son borradores hasta pulsar «Publicar». J1 consulta únicamente la versión aprobada.</p>';
+  html+='<div class="block"><strong>Revisión local: v'+(current.draftRev||0)+' | Publicada: v'+(current.publishedRev||0)+'</strong><p>'+(pending?'Hay una revisión pendiente. J1 todavía ve el corte anterior.':'Los datos visibles coinciden con la publicación actual.')+'</p></div>';
+  html+='<h2>Modificar asignación ficticia</h2><div class="form-grid"><label>Funcionario<select id="member">'+people.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===selectedMember?'selected':'')+'>'+esc(x.rank)+' · '+esc(x.name)+'</option>').join('')+'</select></label><label>Situación<select id="situation">'+states.map(x=>'<option '+(selection.status===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></label></div><div class="form-grid"><label>Punto<select id="assigned">'+pts.map(x=>'<option '+(selection.point===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></label><label>Fecha del parte<input value="'+esc(fmt(current.day))+'" disabled></label></div><div class="actionrow"><button class="mainbtn" id="save-person">Guardar borrador</button></div>';
+  html+='<h2>Logística ficticia</h2><div class="form-grid">'+[['vehicles_total','Vehículos registrados'],['vehicles_service','Vehículos en servicio'],['radios','Radios'],['pdas','PDA']].map(([k,n])=>'<label>'+n+'<input id="'+k+'" type="number" min="0" max="100" value="'+Number(log[k]||0)+'"></label>').join('')+'</div><div class="actionrow"><button id="save-log">Guardar medios</button></div>';
+  html+='<div class="block highlight"><h2>Publicar para J1</h2><p>Esta acción cambia la revisión que se ve desde otros navegadores. El historial de versiones anteriores se conserva.</p><button class="mainbtn" id="publish" '+(!pending?'disabled':'')+'>Publicar revisión pendiente</button></div>';
+  html+='<h2>Crear siguiente jornada</h2><div class="form-grid"><label>Fecha programada<input type="date" id="newday" value="2026-10-28"></label><div class="actionrow"><button id="make-day">Crear borrador del día</button></div></div>';
+  html+='<h2>Servicios ficticios confirmados</h2><p class="p">Un funcionario puede tener Ministerio y Aeropuerto el mismo día. Repetir cualquiera no duplica el registro.</p><div class="actionrow"><button data-service="Ministerio">Confirmar Ministerio</button><button data-service="Aeropuerto">Confirmar Aeropuerto</button></div>';
+  html+='<div class="edit-note"><strong>Carga de Excel real no habilitada.</strong> La plataforma actual solo admite cambios sobre personal y medios inventados. No envíe documentos institucionales.</div></section>';
+ }
+ $('view').innerHTML=html;
+ document.querySelectorAll('[data-tabgo]').forEach(b=>b.onclick=()=>{tab=b.dataset.tabgo;render()});
+ document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>openPerson(b.dataset.person));
+ document.querySelectorAll('[data-group]').forEach(b=>b.onclick=()=>{group=Number(b.dataset.group);render()});
+ if(tab==='admin')bindAdmin(people);
+}
+async function change(action,extra={}){
+ if(wait||!current)return;
+ wait=true;say('Guardando…');
+ try{const r=await api('POST',{action,day:current.day,...extra});say(r.message||'Acción completada');await refresh(current.day);return r}
+ catch(e){say(e.message);return null}
+ finally{wait=false}
+}
+function bindAdmin(people){
+ const m=$('member'),s=$('situation'),p=$('assigned');
+ if(!m)return;
+ m.onchange=()=>{const v=people.find(x=>x.id===m.value);selection={day:current.day,id:v.id,status:v.status,point:v.point||pts[0]};render()};
+ s.onchange=()=>{selection.status=s.value;p.disabled=s.value!=='Disponible'};
+ p.disabled=s.value!=='Disponible';p.onchange=()=>{selection.point=p.value};
+ $('save-person').onclick=()=>change('draft',{edits:[{id:m.value,status:s.value,point:s.value==='Disponible'?p.value:''}]});
+ $('save-log').onclick=()=>change('draft',{edits:[],logistics:Object.fromEntries(['vehicles_total','vehicles_service','radios','pdas'].map(id=>[id,Number($(id).value)]))});
+ $('publish').onclick=()=>change('publish');
+ $('make-day').onclick=async()=>{const day=$('newday').value;if(!day){say('Elija una fecha');return}const r=await change('newday',{day});if(r){await refresh(day);$('day').value=day;tab='admin';render()}};
+ document.querySelectorAll('[data-service]').forEach(b=>b.onclick=()=>change('confirm',{person_id:m.value,service:b.dataset.service}));
+}
+async function openPerson(id){
+ if(!current)return;
+ const person=current.part.people.find(x=>x.id===id);if(!person)return;
+ const services=current.services.filter(s=>s.person_id===id);
+ $('modal').classList.remove('hidden');
+ $('modal-body').innerHTML='<div class="eyebrow">Historial de ejemplo</div><h2>'+esc(person.rank+' · '+person.name)+'</h2><p class="p">'+esc(person.point||person.status)+' · '+fmt(current.day)+'</p><h2>Servicios confirmados</h2><p class="p">'+(services.length?services.map(s=>esc(s.service)).join(', '):'Sin servicios confirmados')+'</p><h2>Historial por fecha</h2><p class="p" id="history-loading">Consultando historial…</p>';
+ try{
+  const result=await api('GET',null,'?person='+encodeURIComponent(id));
+  const hist=result.history||[];
+  $('history-loading').innerHTML=hist.map(h=>'<div class="item"><span><strong>'+fmt(h.day)+'</strong><small>'+esc(h.point||h.status)+'</small></span><b>'+h.services.length+' confirmados</b></div>').join('')||'No hay historial publicado';
+ }catch(e){$('history-loading').textContent=e.message}
+}
+$('modal-close').onclick=()=>{$('modal').classList.add('hidden')};
+$('modal').onclick=e=>{if(e.target.id==='modal')$('modal').classList.add('hidden')};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('modal').classList.add('hidden')});
+$('sign-in').onsubmit=async(e)=>{
+ e.preventDefault();const code=$('access-code').value;$('access-code').value='';say('Verificando credenciales…');
+ try{await api('POST',{action:'login',accessCode:code});say('Acceso autorizado');tab='resumen';await refresh()}catch(err){say(err.message)}
+};
+$('logout').onclick=async()=>{try{await api('POST',{action:'logout'});location.reload()}catch(e){say(e.message)}};
+$('refresh').onclick=()=>refresh(current?.day);
+$('day').onchange=e=>{selection=null;refresh(e.target.value)};
+document.querySelectorAll('#tabs [data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});
+refresh();timer=setInterval(()=>{if(current&&!wait&&!document.hidden)refresh(current.day)},20000);
+})();
+</script>
+</body></html>
