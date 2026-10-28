@@ -74,7 +74,8 @@ const realNames=JSON.parse(JSON.stringify(upload));realNames.part.people[0].name
 ok((await req("POST",realNames,ac)).status===400,"real names rejected by synthetic-only import");
 const realPlace=JSON.parse(JSON.stringify(upload));realPlace.part.people[0].point="BARRIO REAL";
 ok((await req("POST",realPlace,ac)).status===400,"real points rejected by synthetic-only import");
-ok((await req("POST",upload,jc)).status===403,"J1 cannot import demo Excel");
+const jDemo=(await req("POST",{action:"login",accessCode:jkey})).cookie;
+ok((await req("POST",upload,jDemo)).status===403,"J1 cannot import demo Excel");
 const freshJ1=await req("POST",{action:"login",accessCode:jkey});
 const jCookie2=freshJ1.cookie;
 const unpublished=await req("GET",null,jCookie2,"?day="+inDay);
