@@ -154,7 +154,7 @@
     if(logistics.vehicles_service>logistics.vehicles_total)fail("No puede haber más vehículos en servicio que registrados.");
     const available=people.filter(p=>p.status==="Disponible");
     const novelties=people.filter(p=>p.status!=="Disponible");
-    const countGroup=a=>[0,1,2,3].map(n=>a.filter(p=>{const i=GRADES.indexOf(p.rank);return i<5?0:i<11?1:i<13?2:3}===n).length).join("-");
+    const countGroup=a=>[0,1,2,3].map(n=>a.filter(p=>{const i=GRADES.indexOf(p.rank);const g=i<5?0:i<11?1:i<13?2:3;return g===n;}).length).join("-");
     return {day,demo_type:"SOLO_FICTICIO",part:{people,logistics},summary:{effective:people.length,available:available.length,novelties:novelties.length,points:new Set(available.map(x=>x.point)).size,schemes:{all:countGroup(people),available:countGroup(available),novelties:countGroup(novelties)}}};
   }
   window.GUFUDExcelDemo={read};
