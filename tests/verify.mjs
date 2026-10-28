@@ -27,4 +27,9 @@ assert(!html.includes("Funcionarios reales"),"El piloto es exclusivamente fictic
 assert(worker.includes('["PERMISO","VACACIONES","CITA MÉDICA"][i-17]'),"Tres novedades ficticias");
 const groupR=/<button[^>]+data-tab="admin"/;
 assert(groupR.test(html),"Botón Admin conectado");
+for(const required of ["Comparar","Recuperar","Consultar sesiones","Cerrar sesiones J1","revisionCompare","expectedRev","adminHistory"])
+  assert(html.includes(required),"Falta el control del panel: "+required);
+for(const required of ['manage==="history"','manage==="compare"','manage==="sessions"','action==="restore"','action==="revoke_sessions"','expectedRev'])
+  assert(worker.includes(required),"Falta seguridad/gestión en servidor: "+required);
+assert(html.includes("current.role==='admin'&&tab==='admin'"),"No debe borrar el Excel seleccionado al refrescar Administrador");
 console.log("OK: HTML JS válido, API y rutas presentes, roles, publicaciones y datos ficticios.");
