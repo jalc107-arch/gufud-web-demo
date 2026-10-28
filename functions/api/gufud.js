@@ -169,7 +169,7 @@ export async function onRequestGet({request,env}){
     }
     const day=url.searchParams.get("day")||list[0]||"2026-10-27";
     if(!validDay(day))return answer({ok:false,error:"Fecha inválida"},400);
-    return answer({ok:true,role:sess.role,days:list,...await getDay(db,day,sess.role)});
+    return answer({ok:true,role:sess.role,auth:{username:sess.username,legacy:sess.legacy},days:list,...await getDay(db,day,sess.role)});
   }catch(e){console.error("GUFUD GET",e);return answer({ok:false,error:"Fallo al consultar la demostración"},503);}
 }
 export async function onRequestPost({request,env}){
