@@ -67,6 +67,31 @@ export async function onRequestGet({request,env}){
     const url=new URL(request.url);
     const days=await db.prepare(sess.role==="admin"?"SELECT DISTINCT day FROM gufud_revisions ORDER BY day DESC LIMIT 60":"SELECT day FROM gufud_published ORDER BY day DESC LIMIT 60").all();
     const list=(days.results||[]).map(x=>x.day);
+    const manage=url.searchParams.get("manage");
+    if(manage){
+      if(sess.role!=="admin")return answer({ok:false,error:"Consulta reservada a Administrador"},403);
+      if(manage==="sessions"){
+        const sessions=await db.prepare("SELECT token_hash,role,expires FROM gufud_sessions WHERE expires>? ORDER BY expires DESC LIMIT 100").bind(Date.now()).all();
+        return answer({ok:true,sessions:(sessions.results||[]).map(x=>({id:x.token_hash.slice(0,16),role:x.role,expires:x.expires,current:x.token_hash===sess.hash}))});
+      }
+      if(manage==="history"){
+        const historyDay=url.searchParams.get("day");
+        if(!validDay(historyDay))return answer({ok:false,error:"Fecha inválida"},400);
+        const published=await db.prepare("SELECT rev,published_at FROM gufud_published WHERE day=?").bind(historyDay).first();
+        const revisions=await db.prepare("SELECT rev,payload,created_at FROM gufud_revisions WHERE day=? ORDER BY rev DESC LIMIT 80").bind(historyDay).all();
+        const changes=await db.prepare("SELECT action,rev,at FROM gufud_audit WHERE day=? ORDER BY id DESC LIMIT 80").bind(historyDay).all();
+        const entries=(revisions.results||[]).map(row=>{
+          const part=JSON.parse(row.payload),people=part.people||[];
+          return {rev:row.rev,createdAt:row.created_at,published:row.rev===published?.rev,
+            effective:people.length,available:people.filter(p=>p.status==="Disponible").length,
+            novelties:people.filter(p=>p.status!=="Disponible").length,
+            logistics:part.logistics||{}};
+        });
+        return answer({ok:true,day:historyDay,publishedRev:published?.rev||0,
+          publishedAt:published?.published_at||null,revisions:entries,audit:changes.results||[]});
+      }
+      return answer({ok:false,error:"Consulta administrativa no reconocida"},400);
+    }
     const person=url.searchParams.get("person");
     if(person){
       if(!/^P\d{3}$/.test(person))return answer({ok:false,error:"Funcionario inválido"},400);
@@ -121,6 +146,33 @@ export async function onRequestPost({request,env}){
     if(sess.role!=="admin")return answer({ok:false,error:"J1 tiene permisos de lectura únicamente"},403);
     const day=input.day;
     if(!validDay(day))return answer({ok:false,error:"Fecha de servicio inválida"},400);
+    if(input.action==="revoke_sessions"){
+      if(input.target!=="j1"&&input.target!=="all_other")
+        return answer({ok:false,error:"Seleccione el tipo de sesiones que desea cerrar"},400);
+      const query=input.target==="j1"?
+        "DELETE FROM gufud_sessions WHERE role='j1'":
+        "DELETE FROM gufud_sessions WHERE token_hash<>?";
+      const result=input.target==="j1"?await db.prepare(query).run():await db.prepare(query).bind(sess.hash).run();
+      await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,NULL,NULL)").bind(input.target==="j1"?"revoke_j1":"revoke_others").run();
+      return answer({ok:true,closed:Number(result.meta?.changes||0),message:"Sesiones de prueba cerradas: "+Number(result.meta?.changes||0)});
+    }
+    if(input.action==="restore"){
+      if(input.demo_type!=="SOLO_FICTICIO"||!Number.isInteger(input.rev)||input.rev<1||!Number.isInteger(input.expectedRev))
+        return answer({ok:false,error:"Solicitud de recuperación inválida"},400);
+      const last=await db.prepare("SELECT rev,content_hash FROM gufud_revisions WHERE day=? ORDER BY rev DESC LIMIT 1").bind(day).first();
+      if(!last)return answer({ok:false,error:"No existe la jornada indicada"},404);
+      if(input.expectedRev!==last.rev)return answer({ok:false,error:"Otra sesión modificó el parte. Actualice y revise antes de recuperar."},409);
+      const old=await db.prepare("SELECT payload,content_hash FROM gufud_revisions WHERE day=? AND rev=?").bind(day,input.rev).first();
+      if(!old)return answer({ok:false,error:"La versión solicitada no existe"},404);
+      if(old.content_hash===last.content_hash)
+        return answer({ok:true,changed:false,message:"Esta versión ya coincide con el último borrador."});
+      const newRev=last.rev+1;
+      await db.prepare("INSERT INTO gufud_revisions(day,rev,payload,content_hash) VALUES(?,?,?,?)").bind(day,newRev,old.payload,old.content_hash).run();
+      await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,?,?)").bind("restore_from_v"+input.rev,day,newRev).run();
+      return answer({ok:true,changed:true,rev:newRev,message:"Recuperada v"+input.rev+" como nuevo BORRADOR v"+newRev+". J1 no cambia hasta publicar."});
+    }
+    if(input.expectedRev!==undefined && (!Number.isInteger(input.expectedRev)||input.expectedRev<0))
+      return answer({ok:false,error:"Versión esperada inválida"},400);
     if(input.action==="import_demo"){
       // This endpoint deliberately accepts NO real names, identifiers or locations.
       // Only the rigid synthetic GUFUD demo workbook is supported.
@@ -150,6 +202,8 @@ export async function onRequestPost({request,env}){
       const part={people:clean,logistics:{vehicles_total:l.vehicles_total,vehicles_service:l.vehicles_service,radios:l.radios,pdas:l.pdas},notes:"Parte de ejemplo. Importación ficticia de Excel, no acredita prestación del servicio."};
       const payload=JSON.stringify(part),fingerprint=await HASH(payload);
       const last=await db.prepare("SELECT rev,content_hash FROM gufud_revisions WHERE day=? ORDER BY rev DESC LIMIT 1").bind(day).first();
+      if(input.expectedRev!==undefined && input.expectedRev!==(last?.rev||0))
+        return answer({ok:false,error:"La fecha fue actualizada en otro dispositivo. Recargue y vuelva a revisar el Excel."},409);
       if(last?.content_hash===fingerprint)
         return answer({ok:true,changed:false,rev:last.rev,message:"La plantilla es idéntica; no se generó una revisión duplicada."});
       const rev=(last?.rev||0)+1;
@@ -169,6 +223,8 @@ export async function onRequestPost({request,env}){
     const last=await db.prepare("SELECT rev,payload,content_hash FROM gufud_revisions WHERE day=? ORDER BY rev DESC LIMIT 1").bind(day).first();
     if(!last)return answer({ok:false,error:"La jornada no existe"},404);
     if(input.action==="draft"){
+      if(input.expectedRev!==undefined && input.expectedRev!==last.rev)
+        return answer({ok:false,error:"Existe una revisión más reciente. Actualice antes de guardar."},409);
       if(!Array.isArray(input.edits)||input.edits.length>25)return answer({ok:false,error:"Cambios inválidos"},400);
       const next=JSON.parse(last.payload);
       for(const e of input.edits){
@@ -193,6 +249,8 @@ export async function onRequestPost({request,env}){
       return answer({ok:true,changed:true,rev,message:"Borrador guardado. J1 aún ve la versión anterior"});
     }
     if(input.action==="publish"){
+      if(input.expectedRev!==undefined && input.expectedRev!==last.rev)
+        return answer({ok:false,error:"El borrador cambió desde su última consulta. Recargue antes de publicar."},409);
       const current=await db.prepare("SELECT rev FROM gufud_published WHERE day=?").bind(day).first();
       if(current?.rev===last.rev)return answer({ok:true,changed:false,message:"Esta revisión ya estaba publicada"});
       await db.prepare("INSERT INTO gufud_published(day,rev,published_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(day) DO UPDATE SET rev=excluded.rev,published_at=CURRENT_TIMESTAMP").bind(day,last.rev).run();
