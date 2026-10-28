@@ -54,7 +54,7 @@ const grades=['CR','TC','MY','CT','TE','ST','CM','SC','IJ','IT','SI','PT','PP','
 const categories=['Oficiales','Nivel ejecutivo','Patrulleros','Auxiliares'];
 const pts=['Punto Alfa','Punto Bravo','Punto Charlie','Punto Delta','Punto Eco','Apoyo administrativo'];
 const states=['Disponible','PERMISO','VACACIONES','CITA MÉDICA'];
-let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null,importPending=null,adminHistory=null,adminSessions=null,revisionCompare=null,adminAccounts=null,inviteShown=null;
+let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null,importPending=null,adminHistory=null,adminSessions=null,revisionCompare=null,adminAccounts=null,inviteShown=null,userAudit=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=d=>{const a=String(d).split('-');return a.length===3?[a[2],a[1],a[0]].join('/'):d};
 const dateTime=t=>t?esc(String(t).replace('T',' ').replace('Z',' UTC')):'No registrado';
@@ -155,6 +155,9 @@ function render(){
     html+=adminAccounts.accounts.map(x=>'<div class="item"><span><strong>'+esc(x.username)+' · '+esc(x.role)+' · '+(x.active?'ACTIVA':'DESACTIVADA')+'</strong><small>Creada: '+dateTime(x.createdAt)+'</small></span>'+(adminAccounts.session?.legacy?'':(x.active?'<button data-account-disable="'+esc(x.username)+'">Desactivar</button>':'<button data-account-enable="'+esc(x.username)+'">Reactivar</button>'))+'</div>').join('');
   }
   html+='</div>';
+  html+='<div class="block"><h2>7 · Auditoría por usuario</h2><p>Acciones registradas por identidad ficticia, sin conservar contraseñas ni códigos de invitación.</p><button type="button" id="load-activity">Consultar actividad</button>';
+  if(userAudit)html+=(userAudit||[]).map(x=>'<div class="item"><span><strong>'+esc(x.actor)+'</strong><small>'+esc(x.action)+' · '+dateTime(x.at)+(x.day?' · '+fmt(x.day):'')+'</small></span><b>'+esc(x.rev??'—')+'</b></div>').join('')||'<p class="p">Sin actividad registrada.</p>';
+  html+='</div>';
   html+='<div class="edit-note"><strong>Carga de Excel real no habilitada.</strong> La plataforma actual solo admite cambios sobre personal y medios inventados. No envíe documentos institucionales.</div></section>';
  }
  $('view').innerHTML=html;
@@ -249,6 +252,12 @@ function bindAdmin(people){
     finally{wait=false}
    };
  }
+ const activityButton=$('load-activity');
+ if(activityButton)activityButton.onclick=async()=>{
+  if(wait)return;wait=true;
+  try{const res=await api('GET',null,'?manage=activity');userAudit=res.activity||[];render();say('Auditoría de cuentas ficticias consultada.')}
+  catch(e){say(e.message)}finally{wait=false}
+ };
  const readAccounts=$('load-accounts');
  if(readAccounts)readAccounts.onclick=async()=>{
   if(wait)return;wait=true;
