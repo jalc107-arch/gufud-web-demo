@@ -144,8 +144,6 @@ export async function onRequestPost({request,env}){
     }
     if(!sess)return answer({ok:false,error:"Se requiere iniciar sesión"},401);
     if(sess.role!=="admin")return answer({ok:false,error:"J1 tiene permisos de lectura únicamente"},403);
-    const day=input.day;
-    if(!validDay(day))return answer({ok:false,error:"Fecha de servicio inválida"},400);
     if(input.action==="revoke_sessions"){
       if(input.target!=="j1"&&input.target!=="all_other")
         return answer({ok:false,error:"Seleccione el tipo de sesiones que desea cerrar"},400);
@@ -156,6 +154,8 @@ export async function onRequestPost({request,env}){
       await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,NULL,NULL)").bind(input.target==="j1"?"revoke_j1":"revoke_others").run();
       return answer({ok:true,closed:Number(result.meta?.changes||0),message:"Sesiones de prueba cerradas: "+Number(result.meta?.changes||0)});
     }
+    const day=input.day;
+    if(input.action!=="revoke_sessions" && !validDay(day))return answer({ok:false,error:"Fecha de servicio inválida"},400);
     if(input.action==="restore"){
       if(input.demo_type!=="SOLO_FICTICIO"||!Number.isInteger(input.rev)||input.rev<1||!Number.isInteger(input.expectedRev))
         return answer({ok:false,error:"Solicitud de recuperación inválida"},400);
