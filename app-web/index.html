@@ -51,9 +51,10 @@ const grades=['CR','TC','MY','CT','TE','ST','CM','SC','IJ','IT','SI','PT','PP','
 const categories=['Oficiales','Nivel ejecutivo','Patrulleros','Auxiliares'];
 const pts=['Punto Alfa','Punto Bravo','Punto Charlie','Punto Delta','Punto Eco','Apoyo administrativo'];
 const states=['Disponible','PERMISO','VACACIONES','CITA MÉDICA'];
-let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null,importPending=null;
+let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null,importPending=null,adminHistory=null,adminSessions=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=d=>{const a=String(d).split('-');return a.length===3?[a[2],a[1],a[0]].join('/'):d};
+const dateTime=t=>t?esc(String(t).replace('T',' ').replace('Z',' UTC')):'No registrado';
 const cat=r=>grades.indexOf(r)<=4?0:grades.indexOf(r)<=10?1:grades.indexOf(r)<=12?2:3;
 const scheme=a=>[0,1,2,3].map(i=>a.filter(p=>cat(p.rank)===i).length).join('-');
 const sort=a=>a.slice().sort((x,y)=>grades.indexOf(x.rank)-grades.indexOf(y.rank)||x.name.localeCompare(y.name,'es'));
@@ -70,6 +71,7 @@ async function refresh(day=null){
  try{
   const search=day?'?day='+encodeURIComponent(day):'';
   const d=await api('GET',null,search);
+  if(current && current.day!==d.day){adminHistory=null;importPending=null;}
   current=d;
   $('login').classList.add('hidden');$('workspace').classList.remove('hidden');$('logout').classList.remove('hidden');
   $('admin-tab').classList.toggle('hidden',d.role!=='admin');
@@ -120,6 +122,20 @@ function render(){
   html+='<div class="block highlight"><h2>Publicar para J1</h2><p>Esta acción cambia la revisión que se ve desde otros navegadores. El historial de versiones anteriores se conserva.</p><button class="mainbtn" id="publish" '+(!pending?'disabled':'')+'>Publicar revisión pendiente</button></div>';
   html+='<h2>Crear siguiente jornada</h2><div class="form-grid"><label>Fecha programada<input type="date" id="newday" value="2026-10-28"></label><div class="actionrow"><button id="make-day">Crear borrador del día</button></div></div>';
   html+='<h2>Servicios ficticios confirmados</h2><p class="p">Un funcionario puede tener Ministerio y Aeropuerto el mismo día. Repetir cualquiera no duplica el registro.</p><div class="actionrow"><button data-service="Ministerio">Confirmar Ministerio</button><button data-service="Aeropuerto">Confirmar Aeropuerto</button></div>';
+  html+='<div class="block"><h2>4 · Historial y recuperación de versiones</h2><p>Consulte cada revisión conservada. Recuperar una versión anterior crea un BORRADOR NUEVO: el parte que ve J1 no cambia hasta publicar.</p><div class="actionrow"><button id="load-revisions" type="button">Consultar versiones de '+fmt(current.day)+'</button></div>';
+  if(adminHistory?.day===current.day){
+    const a=adminHistory;
+    html+='<p class="p">Última publicación: v'+(a.publishedRev||0)+' · '+dateTime(a.publishedAt)+'</p>';
+    html+=(a.revisions||[]).map(v=>'<div class="item" style="align-items:flex-start"><span><strong>Versión '+v.rev+(v.published?' · PUBLICADA':'')+'</strong><small>'+dateTime(v.createdAt)+' · Fuerza efectiva '+v.effective+' · Disponible '+v.available+' · Novedades '+v.novelties+'</small></span>'+(v.rev===current.draftRev?'':'<button type="button" data-restore-rev="'+v.rev+'" style="font-size:11px">Recuperar</button>')+'</div>').join('')||'<p class="p">No existen revisiones para esta fecha.</p>';
+    html+='<details><summary>Registro de acciones <span>'+(a.audit||[]).length+'</span></summary><div class="detail-body">'+(a.audit||[]).map(x=>'<div class="item"><span>'+esc(x.action)+'<small>'+dateTime(x.at)+'</small></span><b>v'+esc(x.rev??'—')+'</b></div>').join('')+'</div></details>';
+  }
+  html+='</div>';
+  html+='<div class="block"><h2>5 · Sesiones y protección de acceso</h2><p>Administre las sesiones de prueba sin compartir claves. Cerrar las sesiones J1 obliga a iniciar sesión nuevamente en otros dispositivos.</p><div class="actionrow"><button type="button" id="show-sessions">Consultar sesiones</button><button type="button" id="end-j1">Cerrar sesiones J1</button><button type="button" id="end-others">Cerrar otras sesiones</button></div>';
+  if(adminSessions){
+    html+='<p class="p">'+adminSessions.length+' sesiones activas de prueba</p>';
+    html+=adminSessions.map(v=>'<div class="item"><span><strong>'+esc(v.role==='admin'?'ADMINISTRADOR':'J1')+(v.current?' · Esta sesión':'')+'</strong><small>Id: '+esc(v.id)+' · Expira: '+dateTime(new Date(v.expires).toISOString())+'</small></span></div>').join('');
+  }
+  html+='</div>';
   html+='<div class="edit-note"><strong>Carga de Excel real no habilitada.</strong> La plataforma actual solo admite cambios sobre personal y medios inventados. No envíe documentos institucionales.</div></section>';
  }
  $('view').innerHTML=html;
@@ -131,7 +147,8 @@ function render(){
 async function change(action,extra={}){
  if(wait||!current)return;
  wait=true;say('Guardando…');
- try{const r=await api('POST',{action,day:current.day,...extra});say(r.message||'Acción completada');await refresh(current.day);return r}
+ try{const expectedRev=['draft','publish'].includes(action)?{expectedRev:current.draftRev}:{};
+ const r=await api('POST',{action,day:current.day,...expectedRev,...extra});adminHistory=null;say(r.message||'Acción completada');await refresh(extra.day||current.day);return r}
  catch(e){say(e.message);return null}
  finally{wait=false}
 }
@@ -158,7 +175,8 @@ function bindAdmin(people){
       if(!confirm('¿Guardar la plantilla FICTICIA del servicio '+fmt(pending.day)+' como BORRADOR? J1 no verá nada hasta que usted publique.'))return;
       wait=true;say('Guardando borrador ficticio...');
       try{
-        const outcome=await api('POST',{action:'import_demo',day:pending.day,demo_type:pending.demo_type,part:pending.part});
+        const outcome=await api('POST',{action:'import_demo',day:pending.day,demo_type:pending.demo_type,part:pending.part,expectedRev:pending.day===current.day?(current.draftRev||0):0});
+        adminHistory=null;
         importPending=null;selection=null;tab='admin';
         await refresh(pending.day);
         say(outcome.message||'Parte ficticio guardado como borrador. Falta publicar.');
@@ -166,6 +184,42 @@ function bindAdmin(people){
       finally{wait=false}
     };
   }
+ const getRevs=$('load-revisions');
+ if(getRevs)getRevs.onclick=async()=>{
+  if(wait)return;wait=true;say('Consultando versiones inmutables...');
+  try{adminHistory=await api('GET',null,'?manage=history&day='+encodeURIComponent(current.day));say('Revisiones consultadas; recuperar no publica automáticamente.');render()}
+  catch(e){say(e.message)}
+  finally{wait=false}
+ };
+ document.querySelectorAll('[data-restore-rev]').forEach(button=>button.onclick=async()=>{
+  const version=Number(button.dataset.restoreRev);
+  if(!Number.isInteger(version)||!current)return;
+  if(!confirm('¿Recuperar v'+version+' como un NUEVO BORRADOR para '+fmt(current.day)+'? J1 continuará viendo lo publicado.'))return;
+  if(wait)return;wait=true;
+  try{const outcome=await api('POST',{action:'restore',day:current.day,rev:version,expectedRev:current.draftRev,demo_type:'SOLO_FICTICIO'});
+   adminHistory=null;selection=null;await refresh(current.day);
+   say(outcome.message||'Recuperación guardada como borrador.')}
+  catch(e){say('No se pudo recuperar la versión: '+e.message)}
+  finally{wait=false}
+ });
+ const showSessions=$('show-sessions');
+ if(showSessions)showSessions.onclick=async()=>{
+  if(wait)return;wait=true;
+  try{const outcome=await api('GET',null,'?manage=sessions');adminSessions=outcome.sessions||[];say('Sesiones activas consultadas.');render()}
+  catch(e){say(e.message)}
+  finally{wait=false}
+ };
+ for(const [buttonId,target,title] of [['end-j1','j1','todas las sesiones J1'],['end-others','all_other','todas las otras sesiones (sin cerrar esta)']]){
+   const button=$(buttonId);
+   if(button)button.onclick=async()=>{
+    if(!confirm('¿Seguro que desea cerrar '+title+' del entorno GUFUD FICTICIO? Los usuarios afectados deberán volver a entrar.'))return;
+    if(wait)return;wait=true;
+    try{const outcome=await api('POST',{action:'revoke_sessions',target});
+      const r=await api('GET',null,'?manage=sessions');adminSessions=r.sessions||[];render();say(outcome.message)}
+    catch(e){say(e.message)}
+    finally{wait=false}
+   };
+ }
  const m=$('member'),s=$('situation'),p=$('assigned');
  if(!m)return;
  m.onchange=()=>{const v=people.find(x=>x.id===m.value);selection={day:current.day,id:v.id,status:v.status,point:v.point||pts[0]};render()};
@@ -198,7 +252,7 @@ $('sign-in').onsubmit=async(e)=>{
 };
 $('logout').onclick=async()=>{try{await api('POST',{action:'logout'});location.reload()}catch(e){say(e.message)}};
 $('refresh').onclick=()=>refresh(current?.day);
-$('day').onchange=e=>{selection=null;refresh(e.target.value)};
+$('day').onchange=e=>{selection=null;adminHistory=null;importPending=null;refresh(e.target.value)};
 document.querySelectorAll('#tabs [data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});
 refresh();timer=setInterval(()=>{if(current&&!wait&&!document.hidden)refresh(current.day)},20000);
 })();
