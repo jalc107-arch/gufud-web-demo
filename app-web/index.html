@@ -154,6 +154,7 @@ function render(){
   if(adminAccounts?.accounts){
     html+=adminAccounts.accounts.map(x=>'<div class="item"><span><strong>'+esc(x.username)+' · '+esc(x.role)+' · '+(x.active?'ACTIVA':'DESACTIVADA')+'</strong><small>Creada: '+dateTime(x.createdAt)+'</small></span>'+(adminAccounts.session?.legacy?'':(x.active?'<button data-account-disable="'+esc(x.username)+'">Desactivar</button>':'<button data-account-enable="'+esc(x.username)+'">Reactivar</button>'))+'</div>').join('');
   }
+  if(adminAccounts?.session && !adminAccounts.session.legacy)html+='<div class="block highlight"><strong>Acceso compartido anterior: '+(adminAccounts.legacyEnabled?'HABILITADO':'DESHABILITADO')+'</strong><p>Desactivar las claves anteriores cerrará las sesiones compartidas. Antes confirme que el Administrador y J1 pueden entrar con cuentas individuales. Este piloto no contiene datos reales.</p><button id="legacy-switch" type="button">'+(adminAccounts.legacyEnabled?'Deshabilitar claves compartidas':'Reactivar claves anteriores (solo pruebas)')+'</button></div>';
   html+='</div>';
   html+='<div class="block"><h2>7 · Auditoría por usuario</h2><p>Acciones registradas por identidad ficticia, sin conservar contraseñas ni códigos de invitación.</p><button type="button" id="load-activity">Consultar actividad</button>';
   if(userAudit)html+=(userAudit||[]).map(x=>'<div class="item"><span><strong>'+esc(x.actor)+'</strong><small>'+esc(x.action)+' · '+dateTime(x.at)+(x.day?' · '+fmt(x.day):'')+'</small></span><b>'+esc(x.rev??'—')+'</b></div>').join('')||'<p class="p">Sin actividad registrada.</p>';
@@ -252,6 +253,16 @@ function bindAdmin(people){
     finally{wait=false}
    };
  }
+ const switchLegacy=$('legacy-switch');
+ if(switchLegacy)switchLegacy.onclick=async()=>{
+  const enabled=!adminAccounts.legacyEnabled;
+  if(!confirm('¿'+(enabled?'Reactivar':'DESHABILITAR')+' el acceso anterior del piloto GUFUD? '+(enabled?'Volverán a funcionar las claves compartidas.':'Todas las sesiones compartidas se cerrarán y deberán usarse cuentas individuales.') ))return;
+  if(wait)return;wait=true;
+  try{
+   const res=await api('POST',{action:'legacy_access',enabled});
+   adminAccounts=await api('GET',null,'?manage=accounts');render();say(res.message);
+  }catch(e){say(e.message)}finally{wait=false}
+ };
  const activityButton=$('load-activity');
  if(activityButton)activityButton.onclick=async()=>{
   if(wait)return;wait=true;
