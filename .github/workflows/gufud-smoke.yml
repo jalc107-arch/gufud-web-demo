@@ -38,3 +38,16 @@ jobs:
           fi
           grep -q 'Se requiere iniciar sesión' /tmp/gufud-api.txt
           echo 'OK: ruta de API conectada y lectura anonima protegida'
+      - name: Comprobar descarga directa de Excel ficticio
+        run: |
+          set -euo pipefail
+          url="https://gufud-web-demo.pages.dev/plantillas/GUFUD_DEMO_2026-10-28.xlsx"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL --connect-timeout 10 --max-time 30 "$url" -o /tmp/gufud.xlsx && head -c 2 /tmp/gufud.xlsx | cmp -s - <(printf 'PK') && unzip -t /tmp/gufud.xlsx >/dev/null; then
+              echo "OK: Excel ficticio descargable y ZIP íntegro"
+              ls -lh /tmp/gufud.xlsx
+              exit 0
+            fi
+            if [ "$i" -eq 6 ]; then echo "ERROR: plantilla Excel no accesible o dañada"; exit 1; fi
+            sleep 10
+          done
