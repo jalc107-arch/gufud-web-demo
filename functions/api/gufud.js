@@ -38,6 +38,14 @@ async function blocked(db,ipHash,now){
   return !!(prev&&prev.count>=7&&now-prev.window_ms<900000);
 }
 function accountPublic(row){return {id:row.id,username:row.username,role:row.role,active:!!row.active,createdAt:row.created_at};}
+async function cutoverStatus(db){
+  const now=Date.now();
+  const active=await db.prepare("SELECT COUNT(*) AS n FROM gufud_users WHERE active=1 AND role='admin'").first();
+  const adminSessions=await db.prepare("SELECT COUNT(DISTINCT u.id) AS n FROM gufud_users u JOIN gufud_account_sessions s ON s.user_id=u.id WHERE u.active=1 AND u.role='admin' AND s.expires>?").bind(now).first();
+  const j1Sessions=await db.prepare("SELECT COUNT(DISTINCT u.id) AS n FROM gufud_users u JOIN gufud_account_sessions s ON s.user_id=u.id WHERE u.active=1 AND u.role='j1' AND s.expires>?").bind(now).first();
+  const activeAdmins=Number(active?.n||0),verifiedAdmins=Number(adminSessions?.n||0),verifiedJ1=Number(j1Sessions?.n||0);
+  return {activeAdmins,verifiedAdmins,verifiedJ1,ready:activeAdmins>=2&&verifiedAdmins>=2&&verifiedJ1>=1};
+}
 
 function answer(value,status=200,cookie=null) {
   const h={"Content-Type":"application/json; charset=utf-8","Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"};
@@ -149,7 +157,7 @@ export async function onRequestGet({request,env}){
       if(manage==="accounts"){
         const rows=await db.prepare("SELECT id,username,role,active,created_at FROM gufud_users ORDER BY created_at DESC LIMIT 100").all();
         const state=await db.prepare("SELECT value FROM gufud_auth_settings WHERE key=?").bind("legacy_enabled").first();
-        return answer({ok:true,accounts:(rows.results||[]).map(accountPublic),session:{username:sess.username,legacy:sess.legacy},legacyEnabled:state?.value!=="0"});
+        return answer({ok:true,accounts:(rows.results||[]).map(accountPublic),session:{username:sess.username,legacy:sess.legacy},legacyEnabled:state?.value!=="0",cutover:await cutoverStatus(db)});
       }
       if(manage==="history"){
         const historyDay=url.searchParams.get("day");
@@ -272,8 +280,18 @@ export async function onRequestPost({request,env}){
     if(input.action==="legacy_access"){
       if(sess.legacy)return answer({ok:false,error:"Solo un administrador individual puede migrar las claves anteriores"},403);
       if(typeof input.enabled!=="boolean")return answer({ok:false,error:"Indique el nuevo estado de acceso"},400);
-      const active=await db.prepare("SELECT COUNT(*) AS n FROM gufud_users WHERE active=1 AND role='admin'").first();
-      if(Number(active?.n||0)<1)return answer({ok:false,error:"Se requiere una cuenta individual de Administrador activa"},409);
+      if(!input.enabled){
+        const safety=await cutoverStatus(db);
+        if(!safety.ready)return answer({ok:false,error:"Antes de retirar claves compartidas, inicie sesión con dos Administradores individuales distintos y un J1 individual. Mantenga ambas cuentas Administrador activas como vía de recuperación."},409);
+        const confirmation=String(input.adminPassword||"");
+        if(confirmation.length<1||confirmation.length>128)return answer({ok:false,error:"Confirme su contraseña individual para retirar el acceso anterior"},400);
+        const now=Date.now(),ipHash=await HASH("cutover:"+(request.headers.get("CF-Connecting-IP")||"unknown"));
+        if(await blocked(db,ipHash,now))return answer({ok:false,error:"Demasiados intentos de confirmación. Intente más tarde."},429);
+        const admin=await db.prepare("SELECT salt,password_hash FROM gufud_users WHERE id=? AND active=1 AND role='admin'").bind(sess.userId).first();
+        const verified=admin&&equalHash(await passwordHash(confirmation,admin.salt),admin.password_hash);
+        if(!verified){await failure(db,ipHash,now);return answer({ok:false,error:"Contraseña individual incorrecta"},401);}
+        await db.prepare("DELETE FROM gufud_attempts WHERE ip_hash=?").bind(ipHash).run();
+      }
       await db.prepare("UPDATE gufud_auth_settings SET value=? WHERE key=?").bind(input.enabled?"1":"0","legacy_enabled").run();
       if(!input.enabled)await db.prepare("DELETE FROM gufud_sessions").run();
       await auditActor(db,sess.username,input.enabled?"legacy_enabled":"legacy_disabled");

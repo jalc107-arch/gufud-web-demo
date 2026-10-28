@@ -27,7 +27,9 @@ jobs:
         run: node tests/verify.mjs
       - name: Pruebas de integración de API y D1 ficticio
         run: node --experimental-sqlite tests/api.integration.mjs
+      - name: Migración aditiva sobre esquema D1 ficticio anterior
+        run: node --experimental-sqlite tests/migration.integration.mjs
       - name: Instalar parser XML para las pruebas del Excel
-        run: npm install --no-save --ignore-scripts @xmldom/xmldom@0.9.8
+        run: npm install --no-save --ignore-scripts @xmldom/xmldom@0.9.12
       - name: Validar generación y lectura de Excel ficticio
         run: node tests/excel.browser.mjs

@@ -154,7 +154,14 @@ function render(){
   if(adminAccounts?.accounts){
     html+=adminAccounts.accounts.map(x=>'<div class="item"><span><strong>'+esc(x.username)+' · '+esc(x.role)+' · '+(x.active?'ACTIVA':'DESACTIVADA')+'</strong><small>Creada: '+dateTime(x.createdAt)+'</small></span>'+(adminAccounts.session?.legacy?'':(x.active?'<button data-account-disable="'+esc(x.username)+'">Desactivar</button>':'<button data-account-enable="'+esc(x.username)+'">Reactivar</button>'))+'</div>').join('');
   }
-  if(adminAccounts?.session && !adminAccounts.session.legacy)html+='<div class="block highlight"><strong>Acceso compartido anterior: '+(adminAccounts.legacyEnabled?'HABILITADO':'DESHABILITADO')+'</strong><p>Desactivar las claves anteriores cerrará las sesiones compartidas. Antes confirme que el Administrador y J1 pueden entrar con cuentas individuales. Este piloto no contiene datos reales.</p><button id="legacy-switch" type="button">'+(adminAccounts.legacyEnabled?'Deshabilitar claves compartidas':'Reactivar claves anteriores (solo pruebas)')+'</button></div>';
+  if(adminAccounts?.session && !adminAccounts.session.legacy){
+    const cs=adminAccounts.cutover||{},ready=!!cs.ready;
+    html+='<div class="block highlight"><strong>Acceso compartido anterior: '+(adminAccounts.legacyEnabled?'HABILITADO':'DESHABILITADO')+'</strong>';
+    html+='<p>Antes del cambio deben tener sesiones vigentes dos Administradores individuales distintos y un J1 individual. La segunda cuenta Administrador es la vía de recuperación si se pierde la primera. No retire ambas cuentas.</p>';
+    html+='<p class="p">Accesos individuales comprobados: Administradores '+Number(cs.verifiedAdmins||0)+'/2 · J1 '+Number(cs.verifiedJ1||0)+'/1. Use «Consultar cuentas» para actualizar esta verificación.</p>';
+    if(adminAccounts.legacyEnabled)html+='<label>Confirmar contraseña de este Administrador para retirar las claves compartidas<input id="cutover-confirm" type="password" autocomplete="current-password" maxlength="128"></label>';
+    html+='<button id="legacy-switch" type="button" '+(adminAccounts.legacyEnabled&&!ready?'disabled':'')+'>'+(adminAccounts.legacyEnabled?'Deshabilitar claves compartidas':'Reactivar claves anteriores (solo pruebas)')+'</button></div>';
+  }
   html+='</div>';
   html+='<div class="block"><h2>7 · Auditoría por usuario</h2><p>Acciones registradas por identidad ficticia, sin conservar contraseñas ni códigos de invitación.</p><button type="button" id="load-activity">Consultar actividad</button>';
   if(userAudit)html+=(userAudit||[]).map(x=>'<div class="item"><span><strong>'+esc(x.actor)+'</strong><small>'+esc(x.action)+' · '+dateTime(x.at)+(x.day?' · '+fmt(x.day):'')+'</small></span><b>'+esc(x.rev??'—')+'</b></div>').join('')||'<p class="p">Sin actividad registrada.</p>';
@@ -256,10 +263,12 @@ function bindAdmin(people){
  const switchLegacy=$('legacy-switch');
  if(switchLegacy)switchLegacy.onclick=async()=>{
   const enabled=!adminAccounts.legacyEnabled;
+  const adminPassword=enabled?undefined:$('cutover-confirm')?.value||'';
+  if(!enabled&&!adminPassword){say('Introduzca su contraseña individual para confirmar la migración.');return}
   if(!confirm('¿'+(enabled?'Reactivar':'DESHABILITAR')+' el acceso anterior del piloto GUFUD? '+(enabled?'Volverán a funcionar las claves compartidas.':'Todas las sesiones compartidas se cerrarán y deberán usarse cuentas individuales.') ))return;
   if(wait)return;wait=true;
   try{
-   const res=await api('POST',{action:'legacy_access',enabled});
+   const res=await api('POST',{action:'legacy_access',enabled,...(enabled?{}:{adminPassword})});
    adminAccounts=await api('GET',null,'?manage=accounts');render();say(res.message);
   }catch(e){say(e.message)}finally{wait=false}
  };
