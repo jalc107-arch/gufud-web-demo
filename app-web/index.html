@@ -272,7 +272,7 @@ $('logout').onclick=async()=>{try{await api('POST',{action:'logout'});location.r
 $('refresh').onclick=()=>refresh(current?.day);
 $('day').onchange=e=>{selection=null;adminHistory=null;revisionCompare=null;importPending=null;refresh(e.target.value)};
 document.querySelectorAll('#tabs [data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});
-refresh();timer=setInterval(()=>{if(current&&!wait&&!document.hidden)refresh(current.day)},20000);
+refresh();timer=setInterval(()=>{if(current&&!wait&&!document.hidden&&!(current.role==='admin'&&tab==='admin'))refresh(current.day)},20000);
 })();
 </script>
 </body></html>
