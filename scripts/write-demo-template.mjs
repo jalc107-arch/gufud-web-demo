@@ -1,0 +1,13 @@
+import {readFileSync,mkdirSync,writeFileSync} from "node:fs";
+import vm from "node:vm";
+const source=readFileSync("app-web/gufud-excel.js","utf8");
+const sandbox={window:{},TextEncoder,Blob,Uint8Array,DataView,Map,Set,Math,String,Array,Object,Number,Date,Error,Promise};
+vm.runInNewContext(source,sandbox,{filename:"gufud-excel.js"});
+const blob=sandbox.window.GUFUDExcelDemo.template("2026-10-28");
+if(blob.size<1000||blob.size>1000000)throw Error("Tamaño de plantilla inválido");
+const bytes=new Uint8Array(await blob.arrayBuffer());
+if(bytes[0]!==0x50||bytes[1]!==0x4b)throw Error("No es archivo ZIP válido");
+mkdirSync("app-web/plantillas",{recursive:true});
+const output="app-web/plantillas/GUFUD_DEMO_2026-10-28.xlsx";
+writeFileSync(output,bytes);
+console.log("Archivo generado:",output,"bytes",bytes.length,"solo datos ficticios.");
