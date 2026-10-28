@@ -109,7 +109,7 @@ function render(){
   const selected=people.find(x=>x.id===selectedMember)||people[0];
   html='<section class="panel"><h2>Administración y publicación</h2><p class="p">Los cambios de ejemplo son borradores hasta pulsar «Publicar». J1 consulta únicamente la versión aprobada.</p>';
   html+='<div class="block"><strong>Revisión local: v'+(current.draftRev||0)+' | Publicada: v'+(current.publishedRev||0)+'</strong><p>'+(pending?'Hay una revisión pendiente. J1 todavía ve el corte anterior.':'Los datos visibles coinciden con la publicación actual.')+'</p></div>';
-  html+='<div class="block"><h2>1 · Importar Excel ficticio</h2><p>Esta prueba acepta exclusivamente la plantilla GUFUD_DEMO, MEDIOS_DEMO y CONFIG. Lea el archivo en este dispositivo, revise el resumen y guarde como borrador. No se admite ningún documento institucional real.</p><label>Seleccionar plantilla .xlsx o .xlsm<input id="excel-file" type="file" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><div class="actionrow"><button type="button" id="excel-inspect">Leer y revisar Excel</button></div></div>';
+  html+='<div class="block"><h2>1 · Importar Excel ficticio</h2><p><button type="button" id="excel-template" class="mainbtn">Descargar plantilla ficticia .xlsx</button></p><p>Esta prueba acepta exclusivamente la plantilla GUFUD_DEMO, MEDIOS_DEMO y CONFIG. Lea el archivo en este dispositivo, revise el resumen y guarde como borrador. No se admite ningún documento institucional real.</p><label>Seleccionar plantilla .xlsx o .xlsm<input id="excel-file" type="file" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><div class="actionrow"><button type="button" id="excel-inspect">Leer y revisar Excel</button></div></div>';
   if(importPending){
     const v=importPending.summary;
     html+='<div class="block highlight"><h2>2 · Vista previa sin publicar</h2><p>Servicio programado: <b>'+fmt(importPending.day)+'</b>. Solo registros sintéticos verificados.</p><div class="stats">'+kpi('Fuerza efectiva',v.effective,v.schemes.all)+kpi('Fuerza disponible',v.available,v.schemes.available,'green')+kpi('Novedades',v.novelties,v.schemes.novelties,'gold')+kpi('Puntos',v.points,'Ficticios')+'</div><p class="p" style="margin-top:12px">Vehículos: '+importPending.part.logistics.vehicles_total+' · En servicio: '+importPending.part.logistics.vehicles_service+' · Radios: '+importPending.part.logistics.radios+' · PDA: '+importPending.part.logistics.pdas+'</p><div class="actionrow"><button class="mainbtn" id="excel-apply">Guardar Excel como borrador</button><button id="excel-cancel">Cancelar vista previa</button></div><p class="p">J1 no verá este corte hasta que Administrador pulse «Publicar revisión pendiente» después de guardarlo.</p></div>';
@@ -136,6 +136,8 @@ async function change(action,extra={}){
  finally{wait=false}
 }
 function bindAdmin(people){
+  const templateButton=$('excel-template');
+  if(templateButton)templateButton.onclick=()=>{try{window.GUFUDExcelDemo.downloadTemplate(current.day);say('Plantilla ficticia descargada para el servicio '+fmt(current.day)+'.')}catch(e){say('No fue posible generar la plantilla: '+e.message)}};
   const fileInput=$('excel-file');
   if(fileInput)$('excel-inspect').onclick=async()=>{
     const file=fileInput.files?.[0];
