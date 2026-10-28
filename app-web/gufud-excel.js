@@ -157,5 +157,63 @@
     const countGroup=a=>[0,1,2,3].map(n=>a.filter(p=>{const i=GRADES.indexOf(p.rank);const g=i<5?0:i<11?1:i<13?2:3;return g===n;}).length).join("-");
     return {day,demo_type:"SOLO_FICTICIO",part:{people,logistics},summary:{effective:people.length,available:available.length,novelties:novelties.length,points:new Set(available.map(x=>x.point)).size,schemes:{all:countGroup(people),available:countGroup(available),novelties:countGroup(novelties)}}};
   }
-  window.GUFUDExcelDemo={read};
+
+  const utf8 = new TextEncoder();
+  function xmlEsc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]));}
+  function zipStore(files){
+    // ZIP store format (no compression). No external CDN, no uploads.
+    const output=[],central=[];let offset=0;
+    const u16=(dv,i,n)=>dv.setUint16(i,n,true),u32=(dv,i,n)=>dv.setUint32(i,n>>>0,true);
+    function crc32(a){
+      let crc=0xffffffff;
+      for(let i=0;i<a.length;i++){crc^=a[i];for(let b=0;b<8;b++)crc=crc&1?(crc>>>1)^0xedb88320:crc>>>1}
+      return (crc^0xffffffff)>>>0;
+    }
+    for(const [name,content] of files){
+      const nb=utf8.encode(name),db=utf8.encode(content),crc=crc32(db);
+      const local=new Uint8Array(30+nb.length),lv=new DataView(local.buffer);
+      u32(lv,0,0x04034b50);u16(lv,4,20);u16(lv,6,0x800);u16(lv,8,0);
+      u32(lv,14,crc);u32(lv,18,db.length);u32(lv,22,db.length);u16(lv,26,nb.length);local.set(nb,30);
+      const hdr=new Uint8Array(46+nb.length),hv=new DataView(hdr.buffer);
+      u32(hv,0,0x02014b50);u16(hv,4,20);u16(hv,6,20);u16(hv,8,0x800);u16(hv,10,0);
+      u32(hv,16,crc);u32(hv,20,db.length);u32(hv,24,db.length);u16(hv,28,nb.length);u32(hv,42,offset);hdr.set(nb,46);
+      output.push(local,db);central.push(hdr);offset+=local.length+db.length;
+    }
+    const directorySize=central.reduce((a,p)=>a+p.length,0);
+    const end=new Uint8Array(22),ev=new DataView(end.buffer);
+    u32(ev,0,0x06054b50);u16(ev,8,central.length);u16(ev,10,central.length);u32(ev,12,directorySize);u32(ev,16,offset);
+    return new Blob([...output,...central,end],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  }
+  function template(day){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(day))fail("Fecha de plantilla incorrecta.");
+    const cell=(col,row,value)=>{
+      const r=col+row;
+      return typeof value==="number"?'<c r="'+r+'"><v>'+value+'</v></c>':'<c r="'+r+'" t="inlineStr"><is><t>'+xmlEsc(value)+'</t></is></c>';
+    };
+    const sheet=rows=>'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+rows.map((r,i)=>'<row r="'+(i+1)+'">'+r.map((v,j)=>cell(String.fromCharCode(65+j),i+1,v)).join('')+'</row>').join('')+'</sheetData></worksheet>';
+    const ranks=["CT","TE","IJ","IT","SI","SI","PT","PT","PT","PT","PT","PP","PP","PP","PP","PP","AXP","AXP","AXP","AXP"];
+    const people=[["ID","GRADO","NOMBRE","PUNTO","ESTADO"]];
+    for(let i=1;i<=20;i++){
+      let point=i<=17?POINTS[(i-1)%6]:"";
+      if(i===1)point="Punto Bravo"; // Demonstrate a difference from the default seed.
+      people.push(["P"+String(i).padStart(3,"0"),ranks[i-1],"Funcionario de prueba "+String(i).padStart(3,"0"),point,i<=17?"Disponible":["PERMISO","VACACIONES","CITA MÉDICA"][i-18]]);
+    }
+    const work='<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'+["GUFUD_DEMO","MEDIOS_DEMO","CONFIG"].map((n,i)=>'<sheet name="'+n+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join('')+'</sheets></workbook>';
+    const rels='<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+[1,2,3].map(i=>'<Relationship Id="rId'+i+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+i+'.xml"/>').join('')+'</Relationships>';
+    const rootRel='<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+    const types='<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+[1,2,3].map(i=>'<Override PartName="/xl/worksheets/sheet'+i+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')+'</Types>';
+    return zipStore([
+      ["[Content_Types].xml",types],["_rels/.rels",rootRel],["xl/workbook.xml",work],["xl/_rels/workbook.xml.rels",rels],
+      ["xl/worksheets/sheet1.xml",sheet(people)],
+      ["xl/worksheets/sheet2.xml",sheet([["CONCEPTO","CANTIDAD"],["vehicles_total",8],["vehicles_service",7],["radios",6],["pdas",3]])],
+      ["xl/worksheets/sheet3.xml",sheet([["CAMPO","VALOR"],["FECHA_SERVICIO",day],["TIPO","SOLO_FICTICIO"]])]
+    ]);
+  }
+  function downloadTemplate(day){
+    const url=URL.createObjectURL(template(day));
+    const a=document.createElement("a");a.href=url;a.download="GUFUD_DEMO_"+day+".xlsx";a.style.display="none";
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+  }
+  window.GUFUDExcelDemo={read,template,downloadTemplate};
 })();
