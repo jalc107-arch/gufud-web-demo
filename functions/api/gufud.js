@@ -27,6 +27,8 @@ async function authSchema(db){
   await db.prepare("CREATE TABLE IF NOT EXISTS gufud_invites (token_hash TEXT PRIMARY KEY,role TEXT NOT NULL CHECK(role IN ('admin','j1')),expires INTEGER NOT NULL,used_at INTEGER,created_by TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
   await db.prepare("CREATE TABLE IF NOT EXISTS gufud_account_sessions (token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL,expires INTEGER NOT NULL)").run();
   await db.prepare("CREATE TABLE IF NOT EXISTS gufud_user_audit (id INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT NOT NULL,action TEXT NOT NULL,day TEXT,rev INTEGER,at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS gufud_auth_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL)").run();
+  await db.prepare("INSERT OR IGNORE INTO gufud_auth_settings(key,value) VALUES(?,?)").bind("legacy_enabled","1").run();
 }
 async function failure(db,ipHash,now){
   await db.prepare("INSERT INTO gufud_attempts(ip_hash,count,window_ms) VALUES(?,1,?) ON CONFLICT(ip_hash) DO UPDATE SET count=CASE WHEN ?-window_ms>900000 THEN 1 ELSE count+1 END,window_ms=CASE WHEN ?-window_ms>900000 THEN excluded.window_ms ELSE window_ms END").bind(ipHash,now,now,now).run();
@@ -75,6 +77,8 @@ async function currentSession(req,db){
   const h=await HASH(cookie);
   const user=await db.prepare("SELECT s.expires,u.id,u.username,u.role FROM gufud_account_sessions s JOIN gufud_users u ON s.user_id=u.id WHERE s.token_hash=? AND u.active=1").bind(h).first();
   if(user&&Number(user.expires)>=Date.now())return {role:user.role,hash:h,userId:user.id,username:user.username,legacy:false};
+  const state=await db.prepare("SELECT value FROM gufud_auth_settings WHERE key=?").bind("legacy_enabled").first();
+  if(state?.value==="0")return null;
   const sess=await db.prepare("SELECT role,expires FROM gufud_sessions WHERE token_hash=?").bind(h).first();
   if(!sess||Number(sess.expires)<Date.now())return null;
   return {role:sess.role,hash:h,userId:null,username:null,legacy:true};
@@ -144,7 +148,8 @@ export async function onRequestGet({request,env}){
       }
       if(manage==="accounts"){
         const rows=await db.prepare("SELECT id,username,role,active,created_at FROM gufud_users ORDER BY created_at DESC LIMIT 100").all();
-        return answer({ok:true,accounts:(rows.results||[]).map(accountPublic),session:{username:sess.username,legacy:sess.legacy}});
+        const state=await db.prepare("SELECT value FROM gufud_auth_settings WHERE key=?").bind("legacy_enabled").first();
+        return answer({ok:true,accounts:(rows.results||[]).map(accountPublic),session:{username:sess.username,legacy:sess.legacy},legacyEnabled:state?.value!=="0"});
       }
       if(manage==="history"){
         const historyDay=url.searchParams.get("day");
@@ -233,6 +238,8 @@ export async function onRequestPost({request,env}){
       return answer({ok:true,role:row.role,username,legacy:false},200,cookieFor(token));
     }
     if(input.action==="login"){
+      const state=await db.prepare("SELECT value FROM gufud_auth_settings WHERE key=?").bind("legacy_enabled").first();
+      if(state?.value==="0")return answer({ok:false,error:"El acceso anterior está deshabilitado. Use su cuenta individual."},403);
       const key=String(input.accessCode||"");
       if(key.length<20||key.length>100)return answer({ok:false,error:"Clave incorrecta"},401);
       const ipHash=await HASH(request.headers.get("CF-Connecting-IP")||"unknown");
@@ -262,6 +269,16 @@ export async function onRequestPost({request,env}){
     if(!sess)return answer({ok:false,error:"Se requiere iniciar sesión"},401);
     if(sess.role!=="admin")return answer({ok:false,error:"J1 tiene permisos de lectura únicamente"},403);
 
+    if(input.action==="legacy_access"){
+      if(sess.legacy)return answer({ok:false,error:"Solo un administrador individual puede migrar las claves anteriores"},403);
+      if(typeof input.enabled!=="boolean")return answer({ok:false,error:"Indique el nuevo estado de acceso"},400);
+      const active=await db.prepare("SELECT COUNT(*) AS n FROM gufud_users WHERE active=1 AND role='admin'").first();
+      if(Number(active?.n||0)<1)return answer({ok:false,error:"Se requiere una cuenta individual de Administrador activa"},409);
+      await db.prepare("UPDATE gufud_auth_settings SET value=? WHERE key=?").bind(input.enabled?"1":"0","legacy_enabled").run();
+      if(!input.enabled)await db.prepare("DELETE FROM gufud_sessions").run();
+      await auditActor(db,sess.username,input.enabled?"legacy_enabled":"legacy_disabled");
+      return answer({ok:true,legacyEnabled:input.enabled,message:input.enabled?"Claves anteriores reactivadas únicamente para el piloto.":"Claves anteriores deshabilitadas y sesiones compartidas cerradas."});
+    }
     if(input.action==="create_invite"){
       if(input.role!=="admin"&&input.role!=="j1")return answer({ok:false,error:"Rol de invitación inválido"},400);
       const token=tokenValue();
