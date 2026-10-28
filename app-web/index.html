@@ -51,7 +51,7 @@ const grades=['CR','TC','MY','CT','TE','ST','CM','SC','IJ','IT','SI','PT','PP','
 const categories=['Oficiales','Nivel ejecutivo','Patrulleros','Auxiliares'];
 const pts=['Punto Alfa','Punto Bravo','Punto Charlie','Punto Delta','Punto Eco','Apoyo administrativo'];
 const states=['Disponible','PERMISO','VACACIONES','CITA MÉDICA'];
-let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null,importPending=null,adminHistory=null,adminSessions=null;
+let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null,importPending=null,adminHistory=null,adminSessions=null,revisionCompare=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=d=>{const a=String(d).split('-');return a.length===3?[a[2],a[1],a[0]].join('/'):d};
 const dateTime=t=>t?esc(String(t).replace('T',' ').replace('Z',' UTC')):'No registrado';
@@ -71,7 +71,7 @@ async function refresh(day=null){
  try{
   const search=day?'?day='+encodeURIComponent(day):'';
   const d=await api('GET',null,search);
-  if(current && current.day!==d.day){adminHistory=null;importPending=null;}
+  if(current && current.day!==d.day){adminHistory=null;revisionCompare=null;importPending=null;}
   current=d;
   $('login').classList.add('hidden');$('workspace').classList.remove('hidden');$('logout').classList.remove('hidden');
   $('admin-tab').classList.toggle('hidden',d.role!=='admin');
@@ -126,7 +126,15 @@ function render(){
   if(adminHistory?.day===current.day){
     const a=adminHistory;
     html+='<p class="p">Última publicación: v'+(a.publishedRev||0)+' · '+dateTime(a.publishedAt)+'</p>';
-    html+=(a.revisions||[]).map(v=>'<div class="item" style="align-items:flex-start"><span><strong>Versión '+v.rev+(v.published?' · PUBLICADA':'')+'</strong><small>'+dateTime(v.createdAt)+' · Fuerza efectiva '+v.effective+' · Disponible '+v.available+' · Novedades '+v.novelties+'</small></span>'+(v.rev===current.draftRev?'':'<button type="button" data-restore-rev="'+v.rev+'" style="font-size:11px">Recuperar</button>')+'</div>').join('')||'<p class="p">No existen revisiones para esta fecha.</p>';
+    html+=(a.revisions||[]).map(v=>'<div class="item" style="align-items:flex-start"><span><strong>Versión '+v.rev+(v.published?' · PUBLICADA':'')+'</strong><small>'+dateTime(v.createdAt)+' · Fuerza efectiva '+v.effective+' · Disponible '+v.available+' · Novedades '+v.novelties+'</small></span><div class="actionrow" style="margin:0"><button type="button" data-compare-rev="'+v.rev+'" style="font-size:11px">Comparar</button>'+(v.rev===current.draftRev?'':'<button type="button" data-restore-rev="'+v.rev+'" style="font-size:11px">Recuperar</button>')+'</div></div>').join('')||'<p class="p">No existen revisiones para esta fecha.</p>';
+    if(revisionCompare?.day===current.day){
+      const c=revisionCompare;
+      html+='<div class="block highlight"><strong>Diferencias entre v'+c.fromRev+' y v'+c.toRev+'</strong><p>Funcionarios con cambios: '+(c.peopleChanges||[]).length+' · Cambios de medios: '+(c.mediaChanges||[]).length+'</p>';
+      html+=(c.peopleChanges||[]).map(p=>'<div class="item"><span><strong>'+esc(p.rank)+' · '+esc(p.name)+'</strong><small>Antes: '+esc(p.before?.status||'No estaba')+' / '+esc(p.before?.point||'Sin punto')+' → Después: '+esc(p.after?.status||'No está')+' / '+esc(p.after?.point||'Sin punto')+'</small></span></div>').join('');
+      html+=(c.mediaChanges||[]).map(m=>'<div class="item"><span><strong>'+esc(m.field)+'</strong><small>'+esc(m.before)+' → '+esc(m.after)+'</small></span></div>').join('');
+      if(!c.peopleChanges?.length&&!c.mediaChanges?.length)html+='<p>No hay diferencias.</p>';
+      html+='</div>';
+    }
     html+='<details><summary>Registro de acciones <span>'+(a.audit||[]).length+'</span></summary><div class="detail-body">'+(a.audit||[]).map(x=>'<div class="item"><span>'+esc(x.action)+'<small>'+dateTime(x.at)+'</small></span><b>v'+esc(x.rev??'—')+'</b></div>').join('')+'</div></details>';
   }
   html+='</div>';
@@ -148,7 +156,7 @@ async function change(action,extra={}){
  if(wait||!current)return;
  wait=true;say('Guardando…');
  try{const expectedRev=['draft','publish'].includes(action)?{expectedRev:current.draftRev}:{};
- const r=await api('POST',{action,day:current.day,...expectedRev,...extra});adminHistory=null;say(r.message||'Acción completada');await refresh(extra.day||current.day);return r}
+ const r=await api('POST',{action,day:current.day,...expectedRev,...extra});adminHistory=null;revisionCompare=null;say(r.message||'Acción completada');await refresh(extra.day||current.day);return r}
  catch(e){say(e.message);return null}
  finally{wait=false}
 }
@@ -176,7 +184,7 @@ function bindAdmin(people){
       wait=true;say('Guardando borrador ficticio...');
       try{
         const outcome=await api('POST',{action:'import_demo',day:pending.day,demo_type:pending.demo_type,part:pending.part,expectedRev:pending.day===current.day?(current.draftRev||0):0});
-        adminHistory=null;
+        adminHistory=null;revisionCompare=null;
         importPending=null;selection=null;tab='admin';
         await refresh(pending.day);
         say(outcome.message||'Parte ficticio guardado como borrador. Falta publicar.');
@@ -191,13 +199,23 @@ function bindAdmin(people){
   catch(e){say(e.message)}
   finally{wait=false}
  };
+ document.querySelectorAll('[data-compare-rev]').forEach(button=>button.onclick=async()=>{
+  const from=Number(button.dataset.compareRev);
+  if(wait||!Number.isInteger(from)||!current)return;
+  wait=true;say('Comparando la revisión seleccionada con la última...');
+  try{
+    revisionCompare=await api('GET',null,'?manage=compare&day='+encodeURIComponent(current.day)+'&from='+from+'&to='+current.draftRev);
+    render();say('Comparación terminada. Recuperar nunca publica automáticamente.');
+  }catch(e){say(e.message)}
+  finally{wait=false}
+ });
  document.querySelectorAll('[data-restore-rev]').forEach(button=>button.onclick=async()=>{
   const version=Number(button.dataset.restoreRev);
   if(!Number.isInteger(version)||!current)return;
   if(!confirm('¿Recuperar v'+version+' como un NUEVO BORRADOR para '+fmt(current.day)+'? J1 continuará viendo lo publicado.'))return;
   if(wait)return;wait=true;
   try{const outcome=await api('POST',{action:'restore',day:current.day,rev:version,expectedRev:current.draftRev,demo_type:'SOLO_FICTICIO'});
-   adminHistory=null;selection=null;await refresh(current.day);
+   adminHistory=null;revisionCompare=null;selection=null;await refresh(current.day);
    say(outcome.message||'Recuperación guardada como borrador.')}
   catch(e){say('No se pudo recuperar la versión: '+e.message)}
   finally{wait=false}
@@ -252,7 +270,7 @@ $('sign-in').onsubmit=async(e)=>{
 };
 $('logout').onclick=async()=>{try{await api('POST',{action:'logout'});location.reload()}catch(e){say(e.message)}};
 $('refresh').onclick=()=>refresh(current?.day);
-$('day').onchange=e=>{selection=null;adminHistory=null;importPending=null;refresh(e.target.value)};
+$('day').onchange=e=>{selection=null;adminHistory=null;revisionCompare=null;importPending=null;refresh(e.target.value)};
 document.querySelectorAll('#tabs [data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});
 refresh();timer=setInterval(()=>{if(current&&!wait&&!document.hidden)refresh(current.day)},20000);
 })();
