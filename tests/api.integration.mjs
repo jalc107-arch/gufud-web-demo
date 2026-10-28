@@ -47,8 +47,11 @@ ok(c1.data.changed&&c2.data.changed&&!c3.data.changed,"independent duties counte
 ok((await req("GET",null,jc,"?day=2026-10-27")).data.services.filter(x=>x.person_id==="P001").length===2,"J1 sees two confirmed duties");
 const future="2026-11-03";
 ok((await req("POST",{action:"newday",day:future},ac)).status===200,"admin creates new date");
+const prepubService=await req("POST",{action:"confirm",day:future,person_id:"P001",service:"Ministerio"},ac);
+ok(prepubService.status===200,"admin can record a simulated service in unpublished day");
 const fresh=await req("GET",null,jc,"?day="+future);
 ok(fresh.data.part===null&&!fresh.data.days.includes(future),"J1 cannot see new unpublished date");
+ok(fresh.data.services.length===0,"J1 cannot see confirmations from unpublished day");
 ok((await req("GET",null,ac,"?day="+future)).data.part!==null,"admin sees new draft day");
 ok((await req("POST",{action:"publish",day:future},ac)).status===200,"admin publishes new date");
 ok((await req("GET",null,jc,"?day="+future)).data.days.includes(future),"J1 sees new date");
