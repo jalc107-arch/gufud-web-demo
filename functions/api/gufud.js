@@ -53,7 +53,8 @@ async function getDay(db,day,role){
     const row=await db.prepare("SELECT payload FROM gufud_revisions WHERE day=? AND rev=?").bind(day,viewedRev).first();
     if(row)part=JSON.parse(row.payload);
   }
-  const svc=await db.prepare("SELECT person_id,service,verified_at FROM gufud_services WHERE day=? ORDER BY person_id,service").bind(day).all();
+  // J1 never sees confirmations from an unpublished day. Administrator can review its drafts.
+  const svc=(role==="j1" && !pub)?{results:[]}:await db.prepare("SELECT person_id,service,verified_at FROM gufud_services WHERE day=? ORDER BY person_id,service").bind(day).all();
   return {day,part,publishedRev:pub?.rev||0,draftRev:role==="admin"?(latest?.rev||0):undefined,viewedRev,services:svc.results||[],publishedAt:pub?.published_at||null};
 }
 export async function onRequestGet({request,env}){
