@@ -42,6 +42,7 @@ input:focus,select:focus,button:focus-visible{outline:2px solid #8ed8df;outline-
 <footer>GUFUD Web. Piloto técnico, sin información operativa real. Las confirmaciones se distinguen de los servicios programados.</footer>
 </main>
 <div id="modal" class="modal hidden" role="dialog" aria-modal="true"><article><button id="modal-close" class="close">Cerrar ✕</button><div id="modal-body"></div></article></div>
+<script src="/gufud-excel.js"></script>
 <script>
 (()=>{
 "use strict";
@@ -50,7 +51,7 @@ const grades=['CR','TC','MY','CT','TE','ST','CM','SC','IJ','IT','SI','PT','PP','
 const categories=['Oficiales','Nivel ejecutivo','Patrulleros','Auxiliares'];
 const pts=['Punto Alfa','Punto Bravo','Punto Charlie','Punto Delta','Punto Eco','Apoyo administrativo'];
 const states=['Disponible','PERMISO','VACACIONES','CITA MÉDICA'];
-let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null;
+let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null,importPending=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=d=>{const a=String(d).split('-');return a.length===3?[a[2],a[1],a[0]].join('/'):d};
 const cat=r=>grades.indexOf(r)<=4?0:grades.indexOf(r)<=10?1:grades.indexOf(r)<=12?2:3;
@@ -108,6 +109,12 @@ function render(){
   const selected=people.find(x=>x.id===selectedMember)||people[0];
   html='<section class="panel"><h2>Administración y publicación</h2><p class="p">Los cambios de ejemplo son borradores hasta pulsar «Publicar». J1 consulta únicamente la versión aprobada.</p>';
   html+='<div class="block"><strong>Revisión local: v'+(current.draftRev||0)+' | Publicada: v'+(current.publishedRev||0)+'</strong><p>'+(pending?'Hay una revisión pendiente. J1 todavía ve el corte anterior.':'Los datos visibles coinciden con la publicación actual.')+'</p></div>';
+  html+='<div class="block"><h2>1 · Importar Excel ficticio</h2><p>Esta prueba acepta exclusivamente la plantilla GUFUD_DEMO, MEDIOS_DEMO y CONFIG. Lea el archivo en este dispositivo, revise el resumen y guarde como borrador. No se admite ningún documento institucional real.</p><label>Seleccionar plantilla .xlsx o .xlsm<input id="excel-file" type="file" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><div class="actionrow"><button type="button" id="excel-inspect">Leer y revisar Excel</button></div></div>';
+  if(importPending){
+    const v=importPending.summary;
+    html+='<div class="block highlight"><h2>2 · Vista previa sin publicar</h2><p>Servicio programado: <b>'+fmt(importPending.day)+'</b>. Solo registros sintéticos verificados.</p><div class="stats">'+kpi('Fuerza efectiva',v.effective,v.schemes.all)+kpi('Fuerza disponible',v.available,v.schemes.available,'green')+kpi('Novedades',v.novelties,v.schemes.novelties,'gold')+kpi('Puntos',v.points,'Ficticios')+'</div><p class="p" style="margin-top:12px">Vehículos: '+importPending.part.logistics.vehicles_total+' · En servicio: '+importPending.part.logistics.vehicles_service+' · Radios: '+importPending.part.logistics.radios+' · PDA: '+importPending.part.logistics.pdas+'</p><div class="actionrow"><button class="mainbtn" id="excel-apply">Guardar Excel como borrador</button><button id="excel-cancel">Cancelar vista previa</button></div><p class="p">J1 no verá este corte hasta que Administrador pulse «Publicar revisión pendiente» después de guardarlo.</p></div>';
+  }
+  html+='<div class="block"><h2>3 · Revisión y publicación</h2><p>La importación nunca publica automáticamente. Compruebe los datos antes de aprobar el corte para J1.</p></div>';
   html+='<h2>Modificar asignación ficticia</h2><div class="form-grid"><label>Funcionario<select id="member">'+people.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===selectedMember?'selected':'')+'>'+esc(x.rank)+' · '+esc(x.name)+'</option>').join('')+'</select></label><label>Situación<select id="situation">'+states.map(x=>'<option '+(selection.status===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></label></div><div class="form-grid"><label>Punto<select id="assigned">'+pts.map(x=>'<option '+(selection.point===x?'selected':'')+'>'+esc(x)+'</option>').join('')+'</select></label><label>Fecha del parte<input value="'+esc(fmt(current.day))+'" disabled></label></div><div class="actionrow"><button class="mainbtn" id="save-person">Guardar borrador</button></div>';
   html+='<h2>Logística ficticia</h2><div class="form-grid">'+[['vehicles_total','Vehículos registrados'],['vehicles_service','Vehículos en servicio'],['radios','Radios'],['pdas','PDA']].map(([k,n])=>'<label>'+n+'<input id="'+k+'" type="number" min="0" max="100" value="'+Number(log[k]||0)+'"></label>').join('')+'</div><div class="actionrow"><button id="save-log">Guardar medios</button></div>';
   html+='<div class="block highlight"><h2>Publicar para J1</h2><p>Esta acción cambia la revisión que se ve desde otros navegadores. El historial de versiones anteriores se conserva.</p><button class="mainbtn" id="publish" '+(!pending?'disabled':'')+'>Publicar revisión pendiente</button></div>';
@@ -129,6 +136,34 @@ async function change(action,extra={}){
  finally{wait=false}
 }
 function bindAdmin(people){
+  const fileInput=$('excel-file');
+  if(fileInput)$('excel-inspect').onclick=async()=>{
+    const file=fileInput.files?.[0];
+    if(!file){say('Seleccione primero un archivo Excel de prueba.');return}
+    importPending=null;say('Leyendo Excel localmente. No se enviarán datos hasta que usted confirme.');
+    try{
+      if(!window.GUFUDExcelDemo?.read)throw Error('No se pudo cargar el lector de Excel de prueba.');
+      importPending=await window.GUFUDExcelDemo.read(file);
+      say('Plantilla ficticia validada: '+importPending.summary.effective+' funcionarios, fecha de servicio '+fmt(importPending.day)+'. Revise y pulse Guardar.');
+      render();
+    }catch(e){say('No fue posible leer este Excel: '+(e.message||e))}
+  };
+  if(importPending){
+    $('excel-cancel').onclick=()=>{importPending=null;say('Importación descartada. No se enviaron datos.');render()};
+    $('excel-apply').onclick=async()=>{
+      if(wait)return;
+      const pending=importPending;
+      if(!confirm('¿Guardar la plantilla FICTICIA del servicio '+fmt(pending.day)+' como BORRADOR? J1 no verá nada hasta que usted publique.'))return;
+      wait=true;say('Guardando borrador ficticio...');
+      try{
+        const outcome=await api('POST',{action:'import_demo',day:pending.day,demo_type:pending.demo_type,part:pending.part});
+        importPending=null;selection=null;tab='admin';
+        await refresh(pending.day);
+        say(outcome.message||'Parte ficticio guardado como borrador. Falta publicar.');
+      }catch(e){say('Error al guardar el borrador ficticio: '+(e.message||e))}
+      finally{wait=false}
+    };
+  }
  const m=$('member'),s=$('situation'),p=$('assigned');
  if(!m)return;
  m.onchange=()=>{const v=people.find(x=>x.id===m.value);selection={day:current.day,id:v.id,status:v.status,point:v.point||pts[0]};render()};
