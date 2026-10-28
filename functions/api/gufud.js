@@ -10,7 +10,7 @@ function answer(value,status=200,cookie=null) {
   if(cookie)h["Set-Cookie"]=cookie;
   return new Response(JSON.stringify(value),{status,headers:h});
 }
-const validDay = d=>typeof d==="string" && /^20[2-9]\d-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(d) && new Date(d+"T12:00:00Z").toISOString().slice(0,10)===d;
+const validDay = d=>{if(typeof d!=="string"||!/^20[2-9]\d-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(d))return false;const t=new Date(d+"T12:00:00Z");return !Number.isNaN(t.getTime())&&t.toISOString().slice(0,10)===d;};
 function synthetic(){
   const ranks=["CT","TE","IJ","IT","SI","SI","PT","PT","PT","PT","PT","PP","PP","PP","PP","PP","AXP","AXP","AXP","AXP"];
   const points=POINTS.slice(0,6);
@@ -73,6 +73,33 @@ export async function onRequestGet({request,env}){
       if(manage==="sessions"){
         const sessions=await db.prepare("SELECT token_hash,role,expires FROM gufud_sessions WHERE expires>? ORDER BY expires DESC LIMIT 100").bind(Date.now()).all();
         return answer({ok:true,sessions:(sessions.results||[]).map(x=>({id:x.token_hash.slice(0,16),role:x.role,expires:x.expires,current:x.token_hash===sess.hash}))});
+      }
+      if(manage==="compare"){
+        const historyDay=url.searchParams.get("day");
+        const fromRev=Number(url.searchParams.get("from"));
+        const toRev=Number(url.searchParams.get("to"));
+        if(!validDay(historyDay)||!Number.isInteger(fromRev)||!Number.isInteger(toRev)||fromRev<1||toRev<1)
+          return answer({ok:false,error:"Seleccione dos revisiones válidas de la misma jornada"},400);
+        const from=await db.prepare("SELECT payload FROM gufud_revisions WHERE day=? AND rev=?").bind(historyDay,fromRev).first();
+        const to=await db.prepare("SELECT payload FROM gufud_revisions WHERE day=? AND rev=?").bind(historyDay,toRev).first();
+        if(!from||!to)return answer({ok:false,error:"Las revisiones solicitadas no existen"},404);
+        const a=JSON.parse(from.payload),b=JSON.parse(to.payload);
+        const left=new Map((a.people||[]).map(p=>[p.id,p]));
+        const right=new Map((b.people||[]).map(p=>[p.id,p]));
+        const changes=[];
+        for(const id of new Set([...left.keys(),...right.keys()])){
+          const p=left.get(id),q=right.get(id);
+          if(!p||!q||p.rank!==q.rank||p.point!==q.point||p.status!==q.status){
+            changes.push({id,rank:q?.rank||p?.rank,name:q?.name||p?.name,
+              before:p?{status:p.status,point:p.point,rank:p.rank}:null,
+              after:q?{status:q.status,point:q.point,rank:q.rank}:null});
+          }
+        }
+        const mediaChanges=[];
+        for(const k of ["vehicles_total","vehicles_service","radios","pdas"]){
+          if(a.logistics?.[k]!==b.logistics?.[k])mediaChanges.push({field:k,before:a.logistics?.[k],after:b.logistics?.[k]});
+        }
+        return answer({ok:true,day:historyDay,fromRev,toRev,peopleChanges:changes.slice(0,100),mediaChanges});
       }
       if(manage==="history"){
         const historyDay=url.searchParams.get("day");
