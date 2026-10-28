@@ -5,6 +5,48 @@ const J1_HASH = "f32cf445a303965db6a956ce2f598e4eab66a23f30dbe5fb86ba09b6a9d592d
 const POINTS = ["Punto Alfa","Punto Bravo","Punto Charlie","Punto Delta","Punto Eco","Apoyo administrativo",""];
 const STATES = ["Disponible","PERMISO","VACACIONES","CITA MÉDICA"];
 const HASH = async s => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s)))).map(b=>b.toString(16).padStart(2,"0")).join("");
+
+const ID_PATTERN=/^demo_[a-z0-9_]{3,24}$/;
+const tokenValue=()=>crypto.randomUUID().replaceAll("-","")+crypto.randomUUID().replaceAll("-","");
+const cookieFor=token=>"gufud_session="+token+"; Max-Age=86400; HttpOnly; Secure; SameSite=Strict; Path=/";
+async function passwordHash(password,saltHex){
+  const bytes=Uint8Array.from(saltHex.match(/../g),byte=>parseInt(byte,16));
+  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveBits"]);
+  const hash=await crypto.subtle.deriveBits({name:"PBKDF2",salt:bytes,iterations:210000,hash:"SHA-256"},key,256);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function equalHash(a,b){
+  if(typeof a!=="string"||typeof b!=="string"||a.length!==b.length)return false;
+  let d=0;for(let i=0;i<a.length;i++)d|=a.charCodeAt(i)^b.charCodeAt(i);return d===0;
+}
+async function auditActor(db,actor,action,day=null,rev=null){
+  await db.prepare("INSERT INTO gufud_user_audit(actor,action,day,rev) VALUES(?,?,?,?)").bind(actor,action,day,rev).run();
+}
+async function authSchema(db){
+  await db.prepare("CREATE TABLE IF NOT EXISTS gufud_users (id TEXT PRIMARY KEY,username TEXT NOT NULL UNIQUE,role TEXT NOT NULL CHECK(role IN ('admin','j1')),salt TEXT NOT NULL,password_hash TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1,created_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS gufud_invites (token_hash TEXT PRIMARY KEY,role TEXT NOT NULL CHECK(role IN ('admin','j1')),expires INTEGER NOT NULL,used_at INTEGER,created_by TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS gufud_account_sessions (token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL,expires INTEGER NOT NULL)").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS gufud_user_audit (id INTEGER PRIMARY KEY AUTOINCREMENT,actor TEXT NOT NULL,action TEXT NOT NULL,day TEXT,rev INTEGER,at TEXT DEFAULT CURRENT_TIMESTAMP)").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS gufud_auth_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL)").run();
+  await db.prepare("INSERT OR IGNORE INTO gufud_auth_settings(key,value) VALUES(?,?)").bind("legacy_enabled","1").run();
+}
+async function failure(db,ipHash,now){
+  await db.prepare("INSERT INTO gufud_attempts(ip_hash,count,window_ms) VALUES(?,1,?) ON CONFLICT(ip_hash) DO UPDATE SET count=CASE WHEN ?-window_ms>900000 THEN 1 ELSE count+1 END,window_ms=CASE WHEN ?-window_ms>900000 THEN excluded.window_ms ELSE window_ms END").bind(ipHash,now,now,now).run();
+}
+async function blocked(db,ipHash,now){
+  const prev=await db.prepare("SELECT count,window_ms FROM gufud_attempts WHERE ip_hash=?").bind(ipHash).first();
+  return !!(prev&&prev.count>=7&&now-prev.window_ms<900000);
+}
+function accountPublic(row){return {id:row.id,username:row.username,role:row.role,active:!!row.active,createdAt:row.created_at};}
+async function cutoverStatus(db){
+  const now=Date.now();
+  const active=await db.prepare("SELECT COUNT(*) AS n FROM gufud_users WHERE active=1 AND role='admin'").first();
+  const adminSessions=await db.prepare("SELECT COUNT(DISTINCT u.id) AS n FROM gufud_users u JOIN gufud_account_sessions s ON s.user_id=u.id WHERE u.active=1 AND u.role='admin' AND s.expires>?").bind(now).first();
+  const j1Sessions=await db.prepare("SELECT COUNT(DISTINCT u.id) AS n FROM gufud_users u JOIN gufud_account_sessions s ON s.user_id=u.id WHERE u.active=1 AND u.role='j1' AND s.expires>?").bind(now).first();
+  const activeAdmins=Number(active?.n||0),verifiedAdmins=Number(adminSessions?.n||0),verifiedJ1=Number(j1Sessions?.n||0);
+  return {activeAdmins,verifiedAdmins,verifiedJ1,ready:activeAdmins>=2&&verifiedAdmins>=2&&verifiedJ1>=1};
+}
+
 function answer(value,status=200,cookie=null) {
   const h={"Content-Type":"application/json; charset=utf-8","Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"};
   if(cookie)h["Set-Cookie"]=cookie;
@@ -18,7 +60,7 @@ function synthetic(){
   return JSON.stringify({people,logistics:{vehicles_total:8,vehicles_service:7,radios:6,pdas:3},notes:"Programación de prueba, no acredita prestación de servicio"});
 }
 async function ready(db){
-  try {await db.prepare("SELECT rev FROM gufud_revisions LIMIT 1").first();return;}
+  try {await db.prepare("SELECT rev FROM gufud_revisions LIMIT 1").first();await authSchema(db);return;}
   catch(_) { /* Initial D1 schema bootstrap, only synthetic data. */ }
   const statements=[
     "CREATE TABLE IF NOT EXISTS gufud_sessions(token_hash TEXT PRIMARY KEY,role TEXT NOT NULL,expires INTEGER NOT NULL)",
@@ -29,6 +71,7 @@ async function ready(db){
     "CREATE TABLE IF NOT EXISTS gufud_audit(id INTEGER PRIMARY KEY AUTOINCREMENT,action TEXT NOT NULL,day TEXT,rev INTEGER,at TEXT DEFAULT CURRENT_TIMESTAMP)"
   ];
   for(const sql of statements)await db.prepare(sql).run();
+  await authSchema(db);
   const payload=synthetic(),fingerprint=await HASH(payload);
   for(const day of ["2026-10-26","2026-10-27"]){
     await db.prepare("INSERT OR IGNORE INTO gufud_revisions(day,rev,payload,content_hash) VALUES(?,1,?,?)").bind(day,payload,fingerprint).run();
@@ -40,9 +83,13 @@ async function currentSession(req,db){
   const cookie=hit?.slice("gufud_session=".length)||"";
   if(!/^[a-f0-9-]{36,80}$/.test(cookie))return null;
   const h=await HASH(cookie);
+  const user=await db.prepare("SELECT s.expires,u.id,u.username,u.role FROM gufud_account_sessions s JOIN gufud_users u ON s.user_id=u.id WHERE s.token_hash=? AND u.active=1").bind(h).first();
+  if(user&&Number(user.expires)>=Date.now())return {role:user.role,hash:h,userId:user.id,username:user.username,legacy:false};
+  const state=await db.prepare("SELECT value FROM gufud_auth_settings WHERE key=?").bind("legacy_enabled").first();
+  if(state?.value==="0")return null;
   const sess=await db.prepare("SELECT role,expires FROM gufud_sessions WHERE token_hash=?").bind(h).first();
   if(!sess||Number(sess.expires)<Date.now())return null;
-  return {role:sess.role,hash:h};
+  return {role:sess.role,hash:h,userId:null,username:null,legacy:true};
 }
 async function getDay(db,day,role){
   const pub=await db.prepare("SELECT rev,published_at FROM gufud_published WHERE day=?").bind(day).first();
@@ -71,8 +118,10 @@ export async function onRequestGet({request,env}){
     if(manage){
       if(sess.role!=="admin")return answer({ok:false,error:"Consulta reservada a Administrador"},403);
       if(manage==="sessions"){
-        const sessions=await db.prepare("SELECT token_hash,role,expires FROM gufud_sessions WHERE expires>? ORDER BY expires DESC LIMIT 100").bind(Date.now()).all();
-        return answer({ok:true,sessions:(sessions.results||[]).map(x=>({id:x.token_hash.slice(0,16),role:x.role,expires:x.expires,current:x.token_hash===sess.hash}))});
+        const legacy=await db.prepare("SELECT token_hash,role,expires FROM gufud_sessions WHERE expires>? ORDER BY expires DESC LIMIT 100").bind(Date.now()).all();
+        const named=await db.prepare("SELECT s.token_hash,u.role,u.username,s.expires FROM gufud_account_sessions s JOIN gufud_users u ON s.user_id=u.id WHERE s.expires>? AND u.active=1 ORDER BY s.expires DESC LIMIT 100").bind(Date.now()).all();
+        const sessions=[...(legacy.results||[]).map(x=>({id:x.token_hash.slice(0,16),role:x.role,expires:x.expires,current:x.token_hash===sess.hash,username:null,legacy:true})),...(named.results||[]).map(x=>({id:x.token_hash.slice(0,16),role:x.role,expires:x.expires,current:x.token_hash===sess.hash,username:x.username,legacy:false}))];
+        return answer({ok:true,sessions});
       }
       if(manage==="compare"){
         const historyDay=url.searchParams.get("day");
@@ -100,6 +149,15 @@ export async function onRequestGet({request,env}){
           if(a.logistics?.[k]!==b.logistics?.[k])mediaChanges.push({field:k,before:a.logistics?.[k],after:b.logistics?.[k]});
         }
         return answer({ok:true,day:historyDay,fromRev,toRev,peopleChanges:changes.slice(0,100),mediaChanges});
+      }
+      if(manage==="activity"){
+        const entries=await db.prepare("SELECT actor,action,day,rev,at FROM gufud_user_audit ORDER BY id DESC LIMIT 100").all();
+        return answer({ok:true,activity:entries.results||[]});
+      }
+      if(manage==="accounts"){
+        const rows=await db.prepare("SELECT id,username,role,active,created_at FROM gufud_users ORDER BY created_at DESC LIMIT 100").all();
+        const state=await db.prepare("SELECT value FROM gufud_auth_settings WHERE key=?").bind("legacy_enabled").first();
+        return answer({ok:true,accounts:(rows.results||[]).map(accountPublic),session:{username:sess.username,legacy:sess.legacy},legacyEnabled:state?.value!=="0",cutover:await cutoverStatus(db)});
       }
       if(manage==="history"){
         const historyDay=url.searchParams.get("day");
@@ -132,7 +190,7 @@ export async function onRequestGet({request,env}){
     }
     const day=url.searchParams.get("day")||list[0]||"2026-10-27";
     if(!validDay(day))return answer({ok:false,error:"Fecha inválida"},400);
-    return answer({ok:true,role:sess.role,days:list,...await getDay(db,day,sess.role)});
+    return answer({ok:true,role:sess.role,auth:{username:sess.username,legacy:sess.legacy},days:list,...await getDay(db,day,sess.role)});
   }catch(e){console.error("GUFUD GET",e);return answer({ok:false,error:"Fallo al consultar la demostración"},503);}
 }
 export async function onRequestPost({request,env}){
@@ -146,7 +204,50 @@ export async function onRequestPost({request,env}){
     let input;try{input=JSON.parse(raw);}catch(_){return answer({ok:false,error:"JSON inválido"},400);}
     if(!input||typeof input!=="object")return answer({ok:false,error:"Solicitud inválida"},400);
     await ready(db);
+
+    if(input.action==="accept_invite"){
+      const invite=String(input.invite||"");
+      const username=String(input.username||"").trim().toLowerCase();
+      const password=String(input.password||"");
+      if(!/^[a-f0-9]{64}$/.test(invite)||!ID_PATTERN.test(username)||password.length<14||password.length>128)
+        return answer({ok:false,error:"Invitación, usuario o contraseña de prueba no válidos"},400);
+      const now=Date.now(),hash=await HASH(invite);
+      const row=await db.prepare("SELECT role,expires,used_at FROM gufud_invites WHERE token_hash=?").bind(hash).first();
+      if(!row||row.used_at!==null||row.expires<now)return answer({ok:false,error:"Invitación inválida o vencida"},401);
+      const dup=await db.prepare("SELECT id FROM gufud_users WHERE username=?").bind(username).first();
+      if(dup)return answer({ok:false,error:"El usuario ya está registrado"},409);
+      const salt=Array.from(crypto.getRandomValues(new Uint8Array(16))).map(n=>n.toString(16).padStart(2,"0")).join("");
+      const digest=await passwordHash(password,salt);
+      const marked=await db.prepare("UPDATE gufud_invites SET used_at=? WHERE token_hash=? AND used_at IS NULL AND expires>=?").bind(now,hash,now).run();
+      if(Number(marked.meta?.changes||0)!==1)return answer({ok:false,error:"Esta invitación ya se utilizó"},409);
+      const id=crypto.randomUUID();
+      await db.prepare("INSERT INTO gufud_users(id,username,role,salt,password_hash,active) VALUES(?,?,?,?,?,1)").bind(id,username,row.role,salt,digest).run();
+      await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,NULL,NULL)").bind("account_activated_"+row.role).run();
+      await auditActor(db,username,"account_activated_"+row.role);
+      return answer({ok:true,message:"Cuenta de prueba activada. Inicie sesión con su usuario."},201);
+    }
+    if(input.action==="login_user"){
+      const username=String(input.username||"").trim().toLowerCase();
+      const password=String(input.password||"");
+      if(!ID_PATTERN.test(username)||password.length<1||password.length>128)return answer({ok:false,error:"Credenciales incorrectas"},401);
+      const now=Date.now(),ipHash=await HASH(request.headers.get("CF-Connecting-IP")||"unknown");
+      if(await blocked(db,ipHash,now))return answer({ok:false,error:"Demasiados intentos. Intente más tarde."},429);
+      const row=await db.prepare("SELECT id,role,active,salt,password_hash FROM gufud_users WHERE username=?").bind(username).first();
+      const salt=row?.salt||"00000000000000000000000000000000";
+      const computed=await passwordHash(password,salt);
+      if(!row||row.active!==1||!equalHash(computed,row.password_hash)){
+        await failure(db,ipHash,now);
+        return answer({ok:false,error:"Credenciales incorrectas"},401);
+      }
+      await db.prepare("DELETE FROM gufud_attempts WHERE ip_hash=?").bind(ipHash).run();
+      const token=tokenValue();
+      await db.prepare("INSERT INTO gufud_account_sessions(token_hash,user_id,expires) VALUES(?,?,?)").bind(await HASH(token),row.id,now+86400000).run();
+      await auditActor(db,username,"login");
+      return answer({ok:true,role:row.role,username,legacy:false},200,cookieFor(token));
+    }
     if(input.action==="login"){
+      const state=await db.prepare("SELECT value FROM gufud_auth_settings WHERE key=?").bind("legacy_enabled").first();
+      if(state?.value==="0")return answer({ok:false,error:"El acceso anterior está deshabilitado. Use su cuenta individual."},403);
       const key=String(input.accessCode||"");
       if(key.length<20||key.length>100)return answer({ok:false,error:"Clave incorrecta"},401);
       const ipHash=await HASH(request.headers.get("CF-Connecting-IP")||"unknown");
@@ -166,11 +267,63 @@ export async function onRequestPost({request,env}){
     }
     const sess=await currentSession(request,db);
     if(input.action==="logout"){
-      if(sess)await db.prepare("DELETE FROM gufud_sessions WHERE token_hash=?").bind(sess.hash).run();
+      if(sess && !sess.legacy)await auditActor(db,sess.username,"logout");
+      if(sess){
+        if(sess.legacy)await db.prepare("DELETE FROM gufud_sessions WHERE token_hash=?").bind(sess.hash).run();
+        else await db.prepare("DELETE FROM gufud_account_sessions WHERE token_hash=?").bind(sess.hash).run();
+      }
       return answer({ok:true},200,"gufud_session=; Max-Age=0; HttpOnly; Secure; SameSite=Strict; Path=/");
     }
     if(!sess)return answer({ok:false,error:"Se requiere iniciar sesión"},401);
     if(sess.role!=="admin")return answer({ok:false,error:"J1 tiene permisos de lectura únicamente"},403);
+
+    if(input.action==="legacy_access"){
+      if(sess.legacy)return answer({ok:false,error:"Solo un administrador individual puede migrar las claves anteriores"},403);
+      if(typeof input.enabled!=="boolean")return answer({ok:false,error:"Indique el nuevo estado de acceso"},400);
+      if(!input.enabled){
+        const safety=await cutoverStatus(db);
+        if(!safety.ready)return answer({ok:false,error:"Antes de retirar claves compartidas, inicie sesión con dos Administradores individuales distintos y un J1 individual. Mantenga ambas cuentas Administrador activas como vía de recuperación."},409);
+        const confirmation=String(input.adminPassword||"");
+        if(confirmation.length<1||confirmation.length>128)return answer({ok:false,error:"Confirme su contraseña individual para retirar el acceso anterior"},400);
+        const now=Date.now(),ipHash=await HASH("cutover:"+(request.headers.get("CF-Connecting-IP")||"unknown"));
+        if(await blocked(db,ipHash,now))return answer({ok:false,error:"Demasiados intentos de confirmación. Intente más tarde."},429);
+        const admin=await db.prepare("SELECT salt,password_hash FROM gufud_users WHERE id=? AND active=1 AND role='admin'").bind(sess.userId).first();
+        const verified=admin&&equalHash(await passwordHash(confirmation,admin.salt),admin.password_hash);
+        if(!verified){await failure(db,ipHash,now);return answer({ok:false,error:"Contraseña individual incorrecta"},401);}
+        await db.prepare("DELETE FROM gufud_attempts WHERE ip_hash=?").bind(ipHash).run();
+      }
+      await db.prepare("UPDATE gufud_auth_settings SET value=? WHERE key=?").bind(input.enabled?"1":"0","legacy_enabled").run();
+      if(!input.enabled)await db.prepare("DELETE FROM gufud_sessions").run();
+      await auditActor(db,sess.username,input.enabled?"legacy_enabled":"legacy_disabled");
+      return answer({ok:true,legacyEnabled:input.enabled,message:input.enabled?"Claves anteriores reactivadas únicamente para el piloto.":"Claves anteriores deshabilitadas y sesiones compartidas cerradas."});
+    }
+    if(input.action==="create_invite"){
+      if(input.role!=="admin"&&input.role!=="j1")return answer({ok:false,error:"Rol de invitación inválido"},400);
+      const token=tokenValue();
+      const expires=Date.now()+60*60*1000; // 60 minutes, one use, disclosed only once.
+      await db.prepare("INSERT INTO gufud_invites(token_hash,role,expires,used_at,created_by) VALUES(?,?,?,NULL,?)")
+        .bind(await HASH(token),input.role,expires,sess.username||"admin_legacy_demo").run();
+      await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,NULL,NULL)").bind("invite_created_"+input.role).run();
+      await auditActor(db,sess.username||"legacy_admin_demo","invite_created_"+input.role);
+      return answer({ok:true,role:input.role,invite:token,expires,message:"Invitación de un solo uso (60 minutos). No compartirá datos reales."});
+    }
+    if(input.action==="set_account_active"){
+      if(sess.legacy)return answer({ok:false,error:"Solo un administrador con cuenta individual puede desactivar cuentas"},403);
+      const username=String(input.username||"");
+      if(!ID_PATTERN.test(username)||typeof input.active!=="boolean")return answer({ok:false,error:"Solicitud de cuenta inválida"},400);
+      const target=await db.prepare("SELECT id,role,active FROM gufud_users WHERE username=?").bind(username).first();
+      if(!target)return answer({ok:false,error:"Cuenta no encontrada"},404);
+      if(target.id===sess.userId&&!input.active)return answer({ok:false,error:"No puede desactivar su propia cuenta activa"},400);
+      if(target.role==="admin"&&!input.active){
+        const admins=await db.prepare("SELECT COUNT(*) AS n FROM gufud_users WHERE role='admin' AND active=1").first();
+        if(Number(admins?.n||0)<=1)return answer({ok:false,error:"No se puede desactivar al último administrador individual"},409);
+      }
+      await db.prepare("UPDATE gufud_users SET active=? WHERE id=?").bind(input.active?1:0,target.id).run();
+      if(!input.active)await db.prepare("DELETE FROM gufud_account_sessions WHERE user_id=?").bind(target.id).run();
+      await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,NULL,NULL)").bind("account_"+(input.active?"reactivated_":"disabled_")+target.role).run();
+      await auditActor(db,sess.username,"account_"+(input.active?"reactivated_":"disabled_")+target.role);
+      return answer({ok:true,username,active:input.active,message:"Estado de la cuenta de prueba actualizado."});
+    }
     if(input.action==="revoke_sessions"){
       if(input.target!=="j1"&&input.target!=="all_other")
         return answer({ok:false,error:"Seleccione el tipo de sesiones que desea cerrar"},400);
@@ -178,8 +331,13 @@ export async function onRequestPost({request,env}){
         "DELETE FROM gufud_sessions WHERE role='j1'":
         "DELETE FROM gufud_sessions WHERE token_hash<>?";
       const result=input.target==="j1"?await db.prepare(query).run():await db.prepare(query).bind(sess.hash).run();
+      const named=input.target==="j1"?
+        await db.prepare("DELETE FROM gufud_account_sessions WHERE user_id IN (SELECT id FROM gufud_users WHERE role='j1')").run():
+        (sess.legacy?await db.prepare("DELETE FROM gufud_account_sessions").run():await db.prepare("DELETE FROM gufud_account_sessions WHERE token_hash<>?").bind(sess.hash).run());
       await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,NULL,NULL)").bind(input.target==="j1"?"revoke_j1":"revoke_others").run();
-      return answer({ok:true,closed:Number(result.meta?.changes||0),message:"Sesiones de prueba cerradas: "+Number(result.meta?.changes||0)});
+      await auditActor(db,sess.username||"legacy_admin_demo",input.target==="j1"?"revoke_j1":"revoke_others");
+      const closed=Number(result.meta?.changes||0)+Number(named.meta?.changes||0);
+      return answer({ok:true,closed,message:"Sesiones de prueba cerradas: "+closed});
     }
     const day=input.day;
     if(input.action!=="revoke_sessions" && !validDay(day))return answer({ok:false,error:"Fecha de servicio inválida"},400);
@@ -196,6 +354,7 @@ export async function onRequestPost({request,env}){
       const newRev=last.rev+1;
       await db.prepare("INSERT INTO gufud_revisions(day,rev,payload,content_hash) VALUES(?,?,?,?)").bind(day,newRev,old.payload,old.content_hash).run();
       await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,?,?)").bind("restore_from_v"+input.rev,day,newRev).run();
+      await auditActor(db,sess.username||"legacy_admin_demo","restore",day,newRev);
       return answer({ok:true,changed:true,rev:newRev,message:"Recuperada v"+input.rev+" como nuevo BORRADOR v"+newRev+". J1 no cambia hasta publicar."});
     }
     if(input.expectedRev!==undefined && (!Number.isInteger(input.expectedRev)||input.expectedRev<0))
@@ -236,6 +395,7 @@ export async function onRequestPost({request,env}){
       const rev=(last?.rev||0)+1;
       await db.prepare("INSERT INTO gufud_revisions(day,rev,payload,content_hash) VALUES(?,?,?,?)").bind(day,rev,payload,fingerprint).run();
       await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,?,?)").bind("import_demo",day,rev).run();
+      await auditActor(db,sess.username||"legacy_admin_demo","import_demo",day,rev);
       return answer({ok:true,changed:true,rev,message:"Excel ficticio importado como borrador v"+rev+". J1 no lo verá hasta que pulse Publicar."});
     }
     if(input.action==="newday"){
@@ -245,6 +405,7 @@ export async function onRequestPost({request,env}){
       if(!last)return answer({ok:false,error:"Sin jornada de ejemplo para copiar"},404);
       await db.prepare("INSERT INTO gufud_revisions(day,rev,payload,content_hash) VALUES(?,1,?,?)").bind(day,last.payload,last.content_hash).run();
       await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,?,1)").bind("newday",day).run();
+      await auditActor(db,sess.username||"legacy_admin_demo","newday",day,1);
       return answer({ok:true,message:"Fecha creada como borrador, pendiente de publicar"});
     }
     const last=await db.prepare("SELECT rev,payload,content_hash FROM gufud_revisions WHERE day=? ORDER BY rev DESC LIMIT 1").bind(day).first();
@@ -273,6 +434,7 @@ export async function onRequestPost({request,env}){
       const rev=last.rev+1;
       await db.prepare("INSERT INTO gufud_revisions(day,rev,payload,content_hash) VALUES(?,?,?,?)").bind(day,rev,payload,checksum).run();
       await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,?,?)").bind("draft",day,rev).run();
+      await auditActor(db,sess.username||"legacy_admin_demo","draft",day,rev);
       return answer({ok:true,changed:true,rev,message:"Borrador guardado. J1 aún ve la versión anterior"});
     }
     if(input.action==="publish"){
@@ -282,12 +444,14 @@ export async function onRequestPost({request,env}){
       if(current?.rev===last.rev)return answer({ok:true,changed:false,message:"Esta revisión ya estaba publicada"});
       await db.prepare("INSERT INTO gufud_published(day,rev,published_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(day) DO UPDATE SET rev=excluded.rev,published_at=CURRENT_TIMESTAMP").bind(day,last.rev).run();
       await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,?,?)").bind("publish",day,last.rev).run();
+      await auditActor(db,sess.username||"legacy_admin_demo","publish",day,last.rev);
       return answer({ok:true,changed:true,rev:last.rev,message:"Publicado para J1 en todos sus dispositivos"});
     }
     if(input.action==="confirm"){
       const id=String(input.person_id||""),service=String(input.service||"");
       if(!["Ministerio","Aeropuerto","Otro servicio ficticio"].includes(service)||!JSON.parse(last.payload).people.some(p=>p.id===id))return answer({ok:false,error:"Servicio o persona inválidos"},400);
       const res=await db.prepare("INSERT OR IGNORE INTO gufud_services(day,person_id,service) VALUES(?,?,?)").bind(day,id,service).run();
+      if(res.meta.changes>0)await auditActor(db,sess.username||"legacy_admin_demo","confirm",day,null);
       return answer({ok:true,changed:res.meta.changes>0,message:res.meta.changes>0?"Confirmación ficticia guardada":"Ese servicio ya estaba registrado"});
     }
     return answer({ok:false,error:"Acción no reconocida"},400);

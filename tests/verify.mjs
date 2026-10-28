@@ -32,4 +32,13 @@ for(const required of ["Comparar","Recuperar","Consultar sesiones","Cerrar sesio
 for(const required of ['manage==="history"','manage==="compare"','manage==="sessions"','action==="restore"','action==="revoke_sessions"','expectedRev'])
   assert(worker.includes(required),"Falta seguridad/gestión en servidor: "+required);
 assert(html.includes("current.role==='admin'&&tab==='admin'"),"No debe borrar el Excel seleccionado al refrescar Administrador");
+
+for(const required of ["user-sign-in","user-activate","login_user","accept_invite","invite-token","invite-j1","invite-admin","legacy-switch","load-activity","load-accounts"])
+ assert(html.includes(required),"La interfaz no tiene la opción individual: "+required);
+for(const required of ["cutover-confirm","verifiedAdmins","verifiedJ1","adminPassword"])
+ assert(html.includes(required),"Falta la confirmación de recuperación para retirar el acceso compartido: "+required);
+for(const required of ["gufud_users","gufud_invites","gufud_account_sessions","gufud_user_audit","gufud_auth_settings","passwordHash","PBKDF2","equalHash","create_invite","accept_invite","set_account_active","legacy_access","login_user","manage===\"accounts\"","manage===\"activity\""])
+ assert(worker.includes(required),"Falta gestión/autenticación: "+required);
+assert(worker.includes("COUNT(DISTINCT u.id)"),"La migración requiere sesiones de usuarios distintos");
+assert(worker.includes("legacy_enabled"),"Claves antiguas deben poder retirarse");
 console.log("OK: HTML JS válido, API y rutas presentes, roles, publicaciones y datos ficticios.");

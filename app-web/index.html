@@ -33,7 +33,10 @@ input:focus,select:focus,button:focus-visible{outline:2px solid #8ed8df;outline-
 <header class="top"><div class="mark">G</div><div><div class="eyebrow">Centro de mando · Sincronización de prueba</div><h1>GUFUD <em>Web</em></h1><div class="subtitle">Administración y consulta J1 desde cualquier dispositivo</div></div><button id="logout" class="hidden">Salir</button></header>
 <div class="warning"><strong>ENTORNO EXCLUSIVO DE DEMOSTRACIÓN</strong>Solo datos inventados. No cargue partes reales, nóminas, ubicaciones ni archivos institucionales. El sitio requiere una base privada conectada.</div>
 <div id="notice" class="status" role="status" aria-live="polite"></div>
-<section class="panel login" id="login"><h2>Acceso al piloto GUFUD</h2><p class="p">Use la clave de prueba asignada. J1 solo puede consultar partes publicados; Administrador puede preparar y publicar revisiones.</p><form id="sign-in"><label>Clave de acceso <input type="password" id="access-code" autocomplete="off" minlength="20" required placeholder="Clave del piloto"></label><button class="mainbtn" type="submit">Ingresar</button></form></section>
+<section class="panel login" id="login"><h2>Acceso al piloto GUFUD</h2><p class="p">Cuentas individuales de demostración. No utilice nombres reales ni datos institucionales.</p>
+<form id="user-sign-in"><label>Usuario ficticio <input id="username" autocomplete="username" placeholder="demo_j1_01" maxlength="29" required></label><label>Contraseña individual <input id="password" type="password" autocomplete="current-password" required></label><button class="mainbtn" type="submit">Ingresar con cuenta individual</button></form>
+<details><summary>Activar cuenta mediante invitación</summary><form id="user-activate"><label>Código de invitación temporal <input type="text" id="invite-token" autocomplete="off" maxlength="64" required></label><label>Nuevo usuario ficticio <input id="invite-username" autocomplete="off" maxlength="29" placeholder="demo_operador01" required></label><label>Contraseña individual (14 caracteres mínimo) <input type="password" id="invite-password" minlength="14" autocomplete="new-password" required></label><button type="submit">Activar cuenta de demostración</button></form></details>
+<details><summary>Acceso anterior del piloto (temporal)</summary><form id="sign-in"><label>Clave anterior <input type="password" id="access-code" autocomplete="off" minlength="20" required></label><button type="submit">Ingresar con clave anterior</button></form></details></section>
 <section id="workspace" class="hidden">
 <div class="bar"><span id="role" class="pill"></span><label>Fecha de servicio <select id="day"></select></label><button id="refresh">Actualizar</button></div>
 <div id="version" class="pub"></div>
@@ -51,7 +54,7 @@ const grades=['CR','TC','MY','CT','TE','ST','CM','SC','IJ','IT','SI','PT','PP','
 const categories=['Oficiales','Nivel ejecutivo','Patrulleros','Auxiliares'];
 const pts=['Punto Alfa','Punto Bravo','Punto Charlie','Punto Delta','Punto Eco','Apoyo administrativo'];
 const states=['Disponible','PERMISO','VACACIONES','CITA MÉDICA'];
-let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null,importPending=null,adminHistory=null,adminSessions=null,revisionCompare=null;
+let current=null,tab='resumen',group=0,selectedMember='P001',selection=null,wait=false,timer=null,importPending=null,adminHistory=null,adminSessions=null,revisionCompare=null,adminAccounts=null,inviteShown=null,userAudit=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=d=>{const a=String(d).split('-');return a.length===3?[a[2],a[1],a[0]].join('/'):d};
 const dateTime=t=>t?esc(String(t).replace('T',' ').replace('Z',' UTC')):'No registrado';
@@ -75,7 +78,7 @@ async function refresh(day=null){
   current=d;
   $('login').classList.add('hidden');$('workspace').classList.remove('hidden');$('logout').classList.remove('hidden');
   $('admin-tab').classList.toggle('hidden',d.role!=='admin');
-  $('role').textContent=d.role==='admin'?'ADMINISTRADOR · EDICIÓN':'J1 · SOLO CONSULTA';
+  $('role').textContent=(d.role==='admin'?'ADMINISTRADOR · EDICIÓN':'J1 · SOLO CONSULTA')+(d.auth?.username?' · '+d.auth.username:' · acceso anterior');
   const oldDay=d.day;
   $('day').innerHTML=d.days.map(x=>'<option value="'+esc(x)+'">'+fmt(x)+'</option>').join('');
   $('day').value=oldDay;
@@ -143,6 +146,25 @@ function render(){
     html+='<p class="p">'+adminSessions.length+' sesiones activas de prueba</p>';
     html+=adminSessions.map(v=>'<div class="item"><span><strong>'+esc(v.role==='admin'?'ADMINISTRADOR':'J1')+(v.current?' · Esta sesión':'')+'</strong><small>Id: '+esc(v.id)+' · Expira: '+dateTime(new Date(v.expires).toISOString())+'</small></span></div>').join('');
   }
+  html+='</div>';
+  html+='<div class="block"><h2>6 · Cuentas individuales de prueba</h2><p>Las invitaciones duran 60 minutos y solo se pueden utilizar una vez. Cada cuenta tiene usuario y contraseña propios. No ingrese nombres ni identificadores reales.</p><div class="actionrow"><button id="invite-admin">Crear invitación Administrador</button><button id="invite-j1">Crear invitación J1</button><button id="load-accounts">Consultar cuentas</button></div>';
+  if(inviteShown){
+    html+='<div class="block highlight"><strong>Invitación para '+esc(inviteShown.role)+'</strong><p class="p">Copie el código y compártalo mediante un canal privado. Después de salir de esta pantalla no se mostrará otra vez.</p><input readonly id="invite-code-output" value="'+esc(inviteShown.invite)+'" style="width:100%"><button id="copy-invite">Copiar invitación</button><p>Vence: '+dateTime(new Date(inviteShown.expires).toISOString())+'</p></div>';
+  }
+  if(adminAccounts?.accounts){
+    html+=adminAccounts.accounts.map(x=>'<div class="item"><span><strong>'+esc(x.username)+' · '+esc(x.role)+' · '+(x.active?'ACTIVA':'DESACTIVADA')+'</strong><small>Creada: '+dateTime(x.createdAt)+'</small></span>'+(adminAccounts.session?.legacy?'':(x.active?'<button data-account-disable="'+esc(x.username)+'">Desactivar</button>':'<button data-account-enable="'+esc(x.username)+'">Reactivar</button>'))+'</div>').join('');
+  }
+  if(adminAccounts?.session && !adminAccounts.session.legacy){
+    const cs=adminAccounts.cutover||{},ready=!!cs.ready;
+    html+='<div class="block highlight"><strong>Acceso compartido anterior: '+(adminAccounts.legacyEnabled?'HABILITADO':'DESHABILITADO')+'</strong>';
+    html+='<p>Antes del cambio deben tener sesiones vigentes dos Administradores individuales distintos y un J1 individual. La segunda cuenta Administrador es la vía de recuperación si se pierde la primera. No retire ambas cuentas.</p>';
+    html+='<p class="p">Accesos individuales comprobados: Administradores '+Number(cs.verifiedAdmins||0)+'/2 · J1 '+Number(cs.verifiedJ1||0)+'/1. Use «Consultar cuentas» para actualizar esta verificación.</p>';
+    if(adminAccounts.legacyEnabled)html+='<label>Confirmar contraseña de este Administrador para retirar las claves compartidas<input id="cutover-confirm" type="password" autocomplete="current-password" maxlength="128"></label>';
+    html+='<button id="legacy-switch" type="button" '+(adminAccounts.legacyEnabled&&!ready?'disabled':'')+'>'+(adminAccounts.legacyEnabled?'Deshabilitar claves compartidas':'Reactivar claves anteriores (solo pruebas)')+'</button></div>';
+  }
+  html+='</div>';
+  html+='<div class="block"><h2>7 · Auditoría por usuario</h2><p>Acciones registradas por identidad ficticia, sin conservar contraseñas ni códigos de invitación.</p><button type="button" id="load-activity">Consultar actividad</button>';
+  if(userAudit)html+=(userAudit||[]).map(x=>'<div class="item"><span><strong>'+esc(x.actor)+'</strong><small>'+esc(x.action)+' · '+dateTime(x.at)+(x.day?' · '+fmt(x.day):'')+'</small></span><b>'+esc(x.rev??'—')+'</b></div>').join('')||'<p class="p">Sin actividad registrada.</p>';
   html+='</div>';
   html+='<div class="edit-note"><strong>Carga de Excel real no habilitada.</strong> La plataforma actual solo admite cambios sobre personal y medios inventados. No envíe documentos institucionales.</div></section>';
  }
@@ -238,6 +260,52 @@ function bindAdmin(people){
     finally{wait=false}
    };
  }
+ const switchLegacy=$('legacy-switch');
+ if(switchLegacy)switchLegacy.onclick=async()=>{
+  const enabled=!adminAccounts.legacyEnabled;
+  const adminPassword=enabled?undefined:$('cutover-confirm')?.value||'';
+  if(!enabled&&!adminPassword){say('Introduzca su contraseña individual para confirmar la migración.');return}
+  if(!confirm('¿'+(enabled?'Reactivar':'DESHABILITAR')+' el acceso anterior del piloto GUFUD? '+(enabled?'Volverán a funcionar las claves compartidas.':'Todas las sesiones compartidas se cerrarán y deberán usarse cuentas individuales.') ))return;
+  if(wait)return;wait=true;
+  try{
+   const res=await api('POST',{action:'legacy_access',enabled,...(enabled?{}:{adminPassword})});
+   adminAccounts=await api('GET',null,'?manage=accounts');render();say(res.message);
+  }catch(e){say(e.message)}finally{wait=false}
+ };
+ const activityButton=$('load-activity');
+ if(activityButton)activityButton.onclick=async()=>{
+  if(wait)return;wait=true;
+  try{const res=await api('GET',null,'?manage=activity');userAudit=res.activity||[];render();say('Auditoría de cuentas ficticias consultada.')}
+  catch(e){say(e.message)}finally{wait=false}
+ };
+ const readAccounts=$('load-accounts');
+ if(readAccounts)readAccounts.onclick=async()=>{
+  if(wait)return;wait=true;
+  try{adminAccounts=await api('GET',null,'?manage=accounts');render();say('Cuentas de prueba consultadas.')}
+  catch(e){say(e.message)}finally{wait=false}
+ };
+ for(const [element,role] of [['invite-admin','admin'],['invite-j1','j1']]){
+  const button=$(element);
+  if(button)button.onclick=async()=>{
+   if(!confirm('¿Crear invitación de un solo uso para el rol '+role.toUpperCase()+'? Usar solamente nombres ficticios.'))return;
+   if(wait)return;wait=true;
+   try{inviteShown=await api('POST',{action:'create_invite',role});render();say('Invitación creada. Copie y resguarde el código, no aparecerá otra vez.')}
+   catch(e){say(e.message)}finally{wait=false}
+  };
+ }
+ const copyInvite=$('copy-invite');
+ if(copyInvite)copyInvite.onclick=async()=>{try{await navigator.clipboard.writeText($('invite-code-output').value);say('Invitación copiada.')}catch(e){say('Seleccione el código y cópielo manualmente.')}};
+ for(const [attribute,active] of [['data-account-disable',false],['data-account-enable',true]]){
+  document.querySelectorAll('['+attribute+']').forEach(button=>button.onclick=async()=>{
+   const username=button.getAttribute(attribute);
+   if(!confirm('¿'+(active?'Reactivar':'Desactivar')+' la cuenta ficticia '+username+'?'))return;
+   if(wait)return;wait=true;
+   try{
+    const r=await api('POST',{action:'set_account_active',username,active});
+    adminAccounts=await api('GET',null,'?manage=accounts');render();say(r.message);
+   }catch(e){say(e.message)}finally{wait=false}
+  });
+ }
  const m=$('member'),s=$('situation'),p=$('assigned');
  if(!m)return;
  m.onchange=()=>{const v=people.find(x=>x.id===m.value);selection={day:current.day,id:v.id,status:v.status,point:v.point||pts[0]};render()};
@@ -264,6 +332,18 @@ async function openPerson(id){
 $('modal-close').onclick=()=>{$('modal').classList.add('hidden')};
 $('modal').onclick=e=>{if(e.target.id==='modal')$('modal').classList.add('hidden')};
 document.addEventListener('keydown',e=>{if(e.key==='Escape')$('modal').classList.add('hidden')});
+$('user-sign-in').onsubmit=async(e)=>{
+ e.preventDefault();const username=$('username').value,password=$('password').value;
+ $('password').value='';say('Verificando cuenta individual...');
+ try{await api('POST',{action:'login_user',username,password});say('Acceso individual autorizado.');tab='resumen';await refresh()}
+ catch(err){say(err.message)}
+};
+$('user-activate').onsubmit=async(e)=>{
+ e.preventDefault();const invite=$('invite-token').value,username=$('invite-username').value,password=$('invite-password').value;
+ $('invite-password').value='';$('invite-token').value='';say('Activando cuenta ficticia...');
+ try{const res=await api('POST',{action:'accept_invite',invite,username,password});say(res.message||'Cuenta activada. Ahora inicie sesión.')}
+ catch(err){say(err.message)}
+};
 $('sign-in').onsubmit=async(e)=>{
  e.preventDefault();const code=$('access-code').value;$('access-code').value='';say('Verificando credenciales…');
  try{await api('POST',{action:'login',accessCode:code});say('Acceso autorizado');tab='resumen';await refresh()}catch(err){say(err.message)}
