@@ -187,4 +187,15 @@ const newAdmin=await req("POST",{action:"login_user",username:"demo_admin_test",
 const activity=await req("GET",null,newAdmin.cookie,"?manage=activity");
 ok(activity.status===200&&activity.data.activity.some(x=>x.actor==="demo_admin_test"),"individual admin may consult per-user activity log");
 ok((await req("GET",null,relogin.cookie,"?manage=activity")).status===401,"revoked J1 cannot inspect per-user audit");
+const switched=await req("POST",{action:"legacy_access",enabled:false},newAdmin.cookie);
+ok(switched.status===200&&switched.data.legacyEnabled===false,"individual admin can disable shared access");
+ok((await req("GET",null,ac)).status===401,"existing shared admin session revoked during cutover");
+ok((await req("POST",{action:"login",accessCode:akey})).status===403,"shared key rejected after cutover");
+ok((await req("GET",null,newAdmin.cookie)).status===200,"named admin remains authenticated after cutover");
+const accountsAfter=await req("GET",null,newAdmin.cookie,"?manage=accounts");
+ok(accountsAfter.data.legacyEnabled===false,"named admin sees legacy-access disabled status");
+const switchedBack=await req("POST",{action:"legacy_access",enabled:true},newAdmin.cookie);
+ok(switchedBack.status===200&&switchedBack.data.legacyEnabled===true,"named admin can re-enable old demo access if needed");
+ok((await req("POST",{action:"login",accessCode:akey})).status===200,"old demo access works again only after explicit reactivation");
+
 console.log("PASS "+n+" GUFUD isolated integration checks; no production data touched.");
