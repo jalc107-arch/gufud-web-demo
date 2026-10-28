@@ -178,4 +178,13 @@ ok((await req("GET",null,accountCookie)).status===200,"individual admin keeps ac
 ok((await req("POST",{action:"logout"},accountCookie)).status===200,"individual logout accepted");
 ok((await req("GET",null,accountCookie)).status===401,"individual logout invalidates token");
 
+const eventLog=sqlite.prepare("SELECT actor,action,day,rev FROM gufud_user_audit ORDER BY id DESC LIMIT 100").all();
+ok(eventLog.some(e=>e.actor==="demo_admin_test"&&e.action==="invite_created_j1"),"audit records named administrator creating invitations");
+ok(eventLog.some(e=>e.actor==="demo_admin_test"&&e.action==="account_disabled_j1"),"audit records named administrator disabling a J1 account");
+ok(eventLog.some(e=>e.actor==="demo_admin_test"&&e.action==="login"),"audit records successful individual login without password");
+ok(eventLog.every(e=>!JSON.stringify(e).includes(syntheticPassword)),"audit does not store user passwords");
+const newAdmin=await req("POST",{action:"login_user",username:"demo_admin_test",password:syntheticPassword});
+const activity=await req("GET",null,newAdmin.cookie,"?manage=activity");
+ok(activity.status===200&&activity.data.activity.some(x=>x.actor==="demo_admin_test"),"individual admin may consult per-user activity log");
+ok((await req("GET",null,relogin.cookie,"?manage=activity")).status===401,"revoked J1 cannot inspect per-user audit");
 console.log("PASS "+n+" GUFUD isolated integration checks; no production data touched.");
