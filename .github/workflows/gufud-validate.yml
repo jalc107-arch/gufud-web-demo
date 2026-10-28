@@ -25,3 +25,5 @@ jobs:
         run: node --input-type=module --check < functions/api/gufud.js
       - name: Validar interfaz, rutas y barreras
         run: node tests/verify.mjs
+      - name: Pruebas de integración de API y D1 ficticio
+        run: node --experimental-sqlite tests/api.integration.mjs
