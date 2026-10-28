@@ -1,0 +1,35 @@
+name: GUFUD - publicar plantilla Excel ficticia
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/write-demo-template.mjs'
+      - '.github/workflows/gufud-template.yml'
+permissions:
+  contents: write
+jobs:
+  publish-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener repositorio
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generar plantilla Excel con datos ficticios
+        run: node scripts/write-demo-template.mjs
+      - name: Guardar plantilla en repositorio para descarga Safari
+        run: |
+          git add app-web/plantillas/GUFUD_DEMO_2026-10-28.xlsx
+          if git diff --cached --quiet; then
+            echo 'Plantilla ya actualizada.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'Publicar plantilla Excel GUFUD ficticia descargable'
+            git push
+          fi
