@@ -1,0 +1,40 @@
+name: GUFUD - prueba de despliegue Pages con D1
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/gufud-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    name: Comprobar sitio y API anonima
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comprobar interfaz publica de prueba
+        run: |
+          set -euo pipefail
+          url="https://gufud-web-demo.pages.dev/"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL --connect-timeout 10 --max-time 30 "$url" -o /tmp/gufud.html && grep -q 'GUFUD Web' /tmp/gufud.html && grep -q 'ENTORNO EXCLUSIVO DE DEMOSTRACIÓN' /tmp/gufud.html; then
+              echo "OK: interfaz GUFUD desplegada"
+              break
+            fi
+            if [ "$i" -eq 6 ]; then echo "ERROR: no carga interfaz GUFUD"; exit 1; fi
+            sleep 10
+          done
+      - name: Comprobar API y conexion D1 sin usar claves
+        run: |
+          set -euo pipefail
+          url="https://gufud-web-demo.pages.dev/api/gufud"
+          response=$(curl -sSL --connect-timeout 10 --max-time 40 -o /tmp/gufud-api.txt -w '%{http_code}' "$url")
+          echo "Estado HTTP anonimo de la API: $response"
+          if [ "$response" != "401" ]; then
+            echo "Se esperaba 401: API disponible y solicitud anonima rechazada."
+            echo "Cuerpo de respuesta sin contenido sensible:"
+            head -c 500 /tmp/gufud-api.txt
+            exit 1
+          fi
+          grep -q 'Se requiere iniciar sesión' /tmp/gufud-api.txt
+          echo 'OK: ruta de API conectada y lectura anonima protegida'
