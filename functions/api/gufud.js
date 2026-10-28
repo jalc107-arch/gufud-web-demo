@@ -90,7 +90,7 @@ export async function onRequestPost({request,env}){
     const origin=request.headers.get("Origin");
     if(origin && origin!==new URL(request.url).origin)return answer({ok:false,error:"Origen rechazado"},403);
     const raw=await request.text();
-    if(raw.length>16000)return answer({ok:false,error:"Entrada demasiado grande"},413);
+    if(raw.length>32000)return answer({ok:false,error:"Entrada demasiado grande"},413);
     let input;try{input=JSON.parse(raw);}catch(_){return answer({ok:false,error:"JSON inválido"},400);}
     if(!input||typeof input!=="object")return answer({ok:false,error:"Solicitud inválida"},400);
     await ready(db);
@@ -121,6 +121,42 @@ export async function onRequestPost({request,env}){
     if(sess.role!=="admin")return answer({ok:false,error:"J1 tiene permisos de lectura únicamente"},403);
     const day=input.day;
     if(!validDay(day))return answer({ok:false,error:"Fecha de servicio inválida"},400);
+    if(input.action==="import_demo"){
+      // This endpoint deliberately accepts NO real names, identifiers or locations.
+      // Only the rigid synthetic GUFUD demo workbook is supported.
+      const rawPart=input.part;
+      const ranks=["CR","TC","MY","CT","TE","ST","CM","SC","IJ","IT","SI","PT","PP","AXP"];
+      if(input.demo_type!=="SOLO_FICTICIO"||!rawPart||typeof rawPart!=="object"||!Array.isArray(rawPart.people))
+        return answer({ok:false,error:"Solo se admite la plantilla ficticia GUFUD_DEMO"},400);
+      if(rawPart.people.length<1||rawPart.people.length>60)
+        return answer({ok:false,error:"La plantilla admite entre 1 y 60 registros ficticios"},400);
+      const ids=new Set();
+      const clean=[];
+      for(const p of rawPart.people){
+        if(!p||typeof p!=="object"||typeof p.id!=="string"||!/^P\d{3}$/.test(p.id))return answer({ok:false,error:"ID ficticio inválido"},400);
+        const nameExpected="Funcionario de prueba "+p.id.slice(1);
+        if(p.name!==nameExpected||!ranks.includes(p.rank)||!STATES.includes(p.status)||!POINTS.includes(p.point)||ids.has(p.id))
+          return answer({ok:false,error:"La importación contiene datos ajenos a la plantilla ficticia"},400);
+        if(p.status==="Disponible"&&!p.point)
+          return answer({ok:false,error:"Cada funcionario disponible debe tener una facción de prueba"},400);
+        ids.add(p.id);
+        clean.push({id:p.id,rank:p.rank,name:nameExpected,point:p.status==="Disponible"?p.point:"",status:p.status});
+      }
+      const l=rawPart.logistics;
+      const lk=["vehicles_total","vehicles_service","radios","pdas"];
+      if(!l||typeof l!=="object"||lk.some(k=>!Number.isInteger(l[k])||l[k]<0||l[k]>100)||l.vehicles_service>l.vehicles_total)
+        return answer({ok:false,error:"Matriz de medios ficticios inválida"},400);
+      clean.sort((a,b)=>ranks.indexOf(a.rank)-ranks.indexOf(b.rank)||a.id.localeCompare(b.id));
+      const part={people:clean,logistics:{vehicles_total:l.vehicles_total,vehicles_service:l.vehicles_service,radios:l.radios,pdas:l.pdas},notes:"Parte de ejemplo. Importación ficticia de Excel, no acredita prestación del servicio."};
+      const payload=JSON.stringify(part),fingerprint=await HASH(payload);
+      const last=await db.prepare("SELECT rev,content_hash FROM gufud_revisions WHERE day=? ORDER BY rev DESC LIMIT 1").bind(day).first();
+      if(last?.content_hash===fingerprint)
+        return answer({ok:true,changed:false,rev:last.rev,message:"La plantilla es idéntica; no se generó una revisión duplicada."});
+      const rev=(last?.rev||0)+1;
+      await db.prepare("INSERT INTO gufud_revisions(day,rev,payload,content_hash) VALUES(?,?,?,?)").bind(day,rev,payload,fingerprint).run();
+      await db.prepare("INSERT INTO gufud_audit(action,day,rev) VALUES(?,?,?)").bind("import_demo",day,rev).run();
+      return answer({ok:true,changed:true,rev,message:"Excel ficticio importado como borrador v"+rev+". J1 no lo verá hasta que pulse Publicar."});
+    }
     if(input.action==="newday"){
       const found=await db.prepare("SELECT rev FROM gufud_revisions WHERE day=? LIMIT 1").bind(day).first();
       if(found)return answer({ok:true,message:"La fecha ya existe, no se duplicó"});
