@@ -1,7 +1,7 @@
 name: GUFUD - validacion de piloto ficticio
 on:
   push:
-    branches: [main]
+    branches: [main, feature/cuentas-individuales-piloto]
     paths:
       - 'app-web/**'
       - 'functions/**'
